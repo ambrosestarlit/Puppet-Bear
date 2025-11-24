@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🐻 Puppet Bear v1.13.0</title>
+    
+    <!-- PWA メタタグ -->
+    <meta name="description" content="Puppet Bear - パペットアニメーション編集ツール">
+    <meta name="theme-color" content="#3d2817">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Puppet Bear">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#3d2817">
+    <meta name="msapplication-tap-highlight" content="no">
+    
+    <!-- PWA マニフェスト -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- アイコン -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
+    
+    <!-- スタイルシート -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- iOS Safari スプラッシュスクリーン -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <img src="logo.png" alt="Puppet Bear" class="header-logo">
+            
+            <!-- 操作ツールバー -->
+            <div class="header-toolbar" id="header-toolbar">
+                <div class="toolbar-group">
+                    <button id="header-tool-rotation" onclick="toggleTool('rotation')" class="toolbar-btn" title="回転ハンドル">🔁 回転</button>
+                    <button id="header-tool-position" onclick="toggleTool('position')" class="toolbar-btn" title="ポジション移動">👇 移動</button>
+                </div>
+                <div class="toolbar-separator"></div>
+                <div class="toolbar-group">
+                    <button id="header-anchor-pick" onclick="startAnchorPointPick()" class="toolbar-btn" title="アンカーをクリックで設定">🎯 アンカー設定</button>
+                    <button id="header-anchor-reset" onclick="resetAnchorPoint()" class="toolbar-btn toolbar-btn-small" title="アンカーを中央に戻す">↩️</button>
+                </div>
+                <div class="toolbar-group toolbar-sliders" id="header-anchor-sliders">
+                    <label class="toolbar-slider-label">X:<span id="headerAnchorX">50</span>%
+                        <input type="range" class="toolbar-slider" id="header-anchor-x-slider" value="50" min="0" max="100" step="1"
+                            oninput="document.getElementById('headerAnchorX').textContent = this.value; setAnchorPointLive('x', parseFloat(this.value) / 100)">
+                    </label>
+                    <label class="toolbar-slider-label">Y:<span id="headerAnchorY">50</span>%
+                        <input type="range" class="toolbar-slider" id="header-anchor-y-slider" value="50" min="0" max="100" step="1"
+                            oninput="document.getElementById('headerAnchorY').textContent = this.value; setAnchorPointLive('y', parseFloat(this.value) / 100)">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <button id="add-image-btn" class="btn-primary">📷 画像追加</button>
+                <button id="play-btn" class="btn-secondary">▶️ 再生</button>
+                <button id="stop-btn" class="btn-secondary">⏹️ 停止</button>
+                <div class="fps-selector">
+                    <button id="fps-24" class="fps-btn">24fps</button>
+                    <button id="fps-30" class="fps-btn active">30fps</button>
+                </div>
+                <label style="display: flex; align-items: center; gap: 6px; margin-left: 12px; cursor: pointer;">
+                    <input type="checkbox" id="show-pins-checkbox" checked style="cursor: pointer;">
+                    <span style="font-size: 13px;">📍 ピン表示</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; margin-left: 8px; cursor: pointer;">
+                    <input type="checkbox" id="loop-playback-checkbox" style="cursor: pointer;" onchange="setLoopPlayback(this.checked)">
+                    <span style="font-size: 13px;">🔁 ループ</span>
+                </label>
+                <button id="export-btn" class="btn-primary" onclick="showExportDialog()" style="margin-left: 12px; background: linear-gradient(135deg, #ff6b6b, #ee5a5a);">
+                    📤 書き出し
+                </button>
+            </div>
+        </header>
+        
+        <!-- メインコンテンツ -->
+        <div class="main-content">
+            <!-- レイヤーリスト -->
+            <aside class="sidebar sidebar-left">
+                <div id="layer-list" class="layer-list"></div>
+            </aside>
+            
+            <!-- キャンバスとタイムライン -->
+            <div class="center-panel">
+                <!-- キャンバス -->
+                <div class="canvas-area">
+                    <div id="canvasContainer" class="canvas-container">
+                        <canvas id="canvas"></canvas>
+                    </div>
+                </div>
+                
+                <!-- タイムライン -->
+                <div class="timeline-container">
+                    <div class="timeline-header">
+                        <span class="timeline-title">🎬 タイムライン</span>
+                        <div class="timeline-zoom-control">
+                            <span class="zoom-label">🔍</span>
+                            <button class="zoom-btn" onclick="zoomTimeline(-1)" title="縮小">−</button>
+                            <input type="range" id="timeline-zoom-slider" class="zoom-slider" 
+                                min="5" max="60" value="20" step="1"
+                                oninput="setTimelineZoom(parseInt(this.value))"
+                                title="タイムラインズーム">
+                            <button class="zoom-btn" onclick="zoomTimeline(1)" title="拡大">+</button>
+                            <span id="zoom-value" class="zoom-value">100%</span>
+                            <button class="zoom-btn zoom-reset" onclick="resetTimelineZoom()" title="リセット">↺</button>
+                        </div>
+                        <span id="current-frame-display" class="current-frame">0f (0.00s)</span>
+                    </div>
+                    <div class="timeline-body">
+                        <div class="timeline-left">
+                            <div id="timeline-layers" class="timeline-layers"></div>
+                        </div>
+                        <div class="timeline-right">
+                            <div id="timeline" class="timeline">
+                                <div id="timeline-content" class="timeline-content"></div>
+                                <div id="playhead" class="playhead"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- プロパティパネル -->
+            <aside class="sidebar sidebar-right">
+                <h2>⚙️ プロパティ</h2>
+                <div id="properties-panel" class="properties-panel">
+                    <p>レイヤーを選択してください</p>
+                </div>
+            </aside>
+        </div>
+    </div>
+    
+    <!-- モジュール読み込み（順番重要） -->
+    <script src="app-core.js"></script>
+    <script src="app-windsway.js"></script>
+    <script src="app-bounce.js"></script>
+    <script src="app-puppet.js"></script>
+    <script src="app-audio.js"></script>
+    <script src="app-timeline.js"></script>
+    <script src="app-animation.js"></script>
+    <script src="app-layers.js"></script>
+    <script src="app-tools.js"></script>
+    <script src="app-clipping.js"></script>
+    <script src="app-properties.js"></script>
+    <script src="app-export.js"></script>
+    <script src="app-touch.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
