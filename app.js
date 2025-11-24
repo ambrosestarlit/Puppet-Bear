@@ -204,6 +204,24 @@ function setupEventListeners() {
         }
     });
     
+    // タッチイベント（パペットハンドル等のドラッグ用）
+    document.addEventListener('touchmove', (e) => {
+        if (typeof handlePuppetDrag === 'function' && typeof isDraggingPuppetHandle !== 'undefined' && isDraggingPuppetHandle) {
+            e.preventDefault();
+            handlePuppetDrag(e);
+        }
+    }, { passive: false });
+    document.addEventListener('touchend', () => {
+        if (typeof handlePuppetDragEnd === 'function') {
+            handlePuppetDragEnd();
+        }
+    });
+    document.addEventListener('touchcancel', () => {
+        if (typeof handlePuppetDragEnd === 'function') {
+            handlePuppetDragEnd();
+        }
+    });
+    
     // オフライン/オンライン検出
     setupOfflineDetection();
 }

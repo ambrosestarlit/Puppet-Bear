@@ -773,11 +773,22 @@ function addFixedPin(arg1, arg2) {
     
     let canvasX, canvasY;
     
-    // イベントオブジェクトの場合
-    if (arg1 && arg1.clientX !== undefined) {
+    // イベントオブジェクトの場合（マウス・タッチ両対応）
+    if (arg1 && (arg1.clientX !== undefined || arg1.touches || arg1.changedTouches)) {
+        let clientX, clientY;
+        if (arg1.touches && arg1.touches.length > 0) {
+            clientX = arg1.touches[0].clientX;
+            clientY = arg1.touches[0].clientY;
+        } else if (arg1.changedTouches && arg1.changedTouches.length > 0) {
+            clientX = arg1.changedTouches[0].clientX;
+            clientY = arg1.changedTouches[0].clientY;
+        } else {
+            clientX = arg1.clientX;
+            clientY = arg1.clientY;
+        }
         const rect = canvas.getBoundingClientRect();
-        canvasX = (arg1.clientX - rect.left) / rect.width * canvas.width;
-        canvasY = (arg1.clientY - rect.top) / rect.height * canvas.height;
+        canvasX = (clientX - rect.left) / rect.width * canvas.width;
+        canvasY = (clientY - rect.top) / rect.height * canvas.height;
     } else {
         // 座標が直接渡された場合
         canvasX = arg1;
@@ -951,8 +962,17 @@ function drawPuppetAnchorElements() {
                     e.stopPropagation();
                     selectedPuppetHandle = handle;
                     isDraggingPuppetHandle = true;
-                    console.log('📍 ハンドル', index + 1, 'ドラッグ開始');
+                    console.log('📍 ハンドル', index + 1, 'ドラッグ開始（マウス）');
                 });
+                
+                // タッチ対応
+                handleElement.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    selectedPuppetHandle = handle;
+                    isDraggingPuppetHandle = true;
+                    console.log('📍 ハンドル', index + 1, 'ドラッグ開始（タッチ）');
+                }, { passive: false });
                 
                 container.appendChild(handleElement);
             }
@@ -1099,9 +1119,22 @@ function handlePuppetMouseMove(e) {
     const layer = layers.find(l => l.id === selectedLayerIds[0]);
     if (!layer || layer.type !== 'puppet') return false;
     
+    // マウスとタッチの両方に対応
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+    
     const canvasRect = canvas.getBoundingClientRect();
-    const canvasX = (e.clientX - canvasRect.left) / canvasRect.width * canvas.width;
-    const canvasY = (e.clientY - canvasRect.top) / canvasRect.height * canvas.height;
+    const canvasX = (clientX - canvasRect.left) / canvasRect.width * canvas.width;
+    const canvasY = (clientY - canvasRect.top) / canvasRect.height * canvas.height;
     
     const parentTransform = getParentTransform(layer.parentLayerId);
     
@@ -1286,9 +1319,22 @@ function setPuppetHandleAnchor(e) {
     const layer = layers.find(l => l.id === selectedLayerIds[0]);
     if (!layer || layer.type !== 'puppet') return;
     
+    // マウスとタッチの両方に対応
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+    
     const rect = canvas.getBoundingClientRect();
-    const canvasX = (e.clientX - rect.left) / rect.width * canvas.width;
-    const canvasY = (e.clientY - rect.top) / rect.height * canvas.height;
+    const canvasX = (clientX - rect.left) / rect.width * canvas.width;
+    const canvasY = (clientY - rect.top) / rect.height * canvas.height;
     
     addPuppetHandle(canvasX, canvasY);
 }
@@ -1304,9 +1350,22 @@ function addFixedPinFromEvent(e) {
     const layer = layers.find(l => l.id === selectedLayerIds[0]);
     if (!layer || layer.type !== 'puppet') return;
     
+    // マウスとタッチの両方に対応
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+    
     const rect = canvas.getBoundingClientRect();
-    const canvasX = (e.clientX - rect.left) / rect.width * canvas.width;
-    const canvasY = (e.clientY - rect.top) / rect.height * canvas.height;
+    const canvasX = (clientX - rect.left) / rect.width * canvas.width;
+    const canvasY = (clientY - rect.top) / rect.height * canvas.height;
     
     addFixedPin(canvasX, canvasY);
 }

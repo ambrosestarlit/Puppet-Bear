@@ -136,11 +136,12 @@ function activateColorClippingEyedropper() {
     // 既存のハンドラーをクリーンアップ
     if (eyedropperHandler) {
         canvas.removeEventListener('mousedown', eyedropperHandler, true);
+        canvas.removeEventListener('touchstart', eyedropperHandler, true);
     }
     
-    // 新しいハンドラーを作成
+    // 新しいハンドラーを作成（マウス・タッチ両対応）
     eyedropperHandler = (e) => {
-        console.log('スポイトクリック検出');
+        console.log('スポイトクリック/タッチ検出', e.type);
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -149,8 +150,9 @@ function activateColorClippingEyedropper() {
         return false;
     };
     
-    // キャプチャフェーズで優先的にイベントを取得
+    // キャプチャフェーズで優先的にイベントを取得（マウス・タッチ両方）
     canvas.addEventListener('mousedown', eyedropperHandler, true);
+    canvas.addEventListener('touchstart', eyedropperHandler, { capture: true, passive: false });
 }
 
 // ===== スポイトツールを無効化 =====
@@ -161,9 +163,10 @@ function deactivateEyedropper() {
     // スポイト用のカーソルクラスを削除
     canvas.classList.remove('eyedropper-active');
     
-    // イベントリスナーを削除
+    // イベントリスナーを削除（マウス・タッチ両方）
     if (eyedropperHandler) {
         canvas.removeEventListener('mousedown', eyedropperHandler, true);
+        canvas.removeEventListener('touchstart', eyedropperHandler, true);
         eyedropperHandler = null;
     }
 }
@@ -178,8 +181,22 @@ function pickColorForColorClipping(e) {
     if (!layer || !layer.colorClipping.referenceLayerId) return;
     
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    
+    // マウスとタッチの両方に対応
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+    } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+    }
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     
     // キャンバスのスケールを考慮
     const scaleX = canvas.width / rect.width;
@@ -187,7 +204,7 @@ function pickColorForColorClipping(e) {
     const canvasX = Math.floor(x * scaleX);
     const canvasY = Math.floor(y * scaleY);
     
-    console.log(`クリック座標: (${canvasX}, ${canvasY})`);
+    console.log(`クリック/タッチ座標: (${canvasX}, ${canvasY})`);
     
     // 参照レイヤーを取得
     const refLayer = layers.find(l => l.id == layer.colorClipping.referenceLayerId);
@@ -257,7 +274,7 @@ function pickColorForColorClipping(e) {
         render();
         updatePropertiesPanel();
         
-    } catch (e) {
+    } catch (err) {
         alert('クリック位置が範囲外です');
         return;
     }

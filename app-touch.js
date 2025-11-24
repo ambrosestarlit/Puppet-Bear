@@ -262,6 +262,11 @@ function handleCanvasTouchMove(e) {
             updatePropertyValues(layer);
         }
         
+        // パペットのハンドルドラッグ
+        if (typeof handlePuppetMouseMove === 'function') {
+            handlePuppetMouseMove({ touches: [touch] });
+        }
+        
         touchState.lastX = touchX;
         touchState.lastY = touchY;
     }
@@ -279,6 +284,16 @@ function handleCanvasTouchEnd(e) {
                 autoInsertKeyframe(layer.id, { scale: layer.scale });
             }
         }
+        
+        // 履歴保存
+        if (typeof saveHistory === 'function') {
+            saveHistory();
+        }
+    }
+    
+    // パペットのハンドルドラッグ終了
+    if (typeof handlePuppetDragEnd === 'function') {
+        handlePuppetDragEnd();
     }
     
     // タッチ終了
@@ -303,6 +318,11 @@ function handleCanvasTouchEnd(e) {
             }
             
             updatePropertiesPanel();
+            
+            // 履歴保存
+            if (typeof saveHistory === 'function') {
+                saveHistory();
+            }
         }
     }
 }
