@@ -189,6 +189,11 @@ function handleCanvasMouseUp(e) {
         
         // プロパティパネルを完全に更新
         updatePropertiesPanel();
+        
+        // 履歴を保存
+        if (typeof saveHistory === 'function') {
+            saveHistory();
+        }
     }
 }
 

@@ -49,20 +49,85 @@ body {
 
 .header {
     background: linear-gradient(135deg, var(--chocolate-dark), var(--chocolate-medium));
-    padding: 0.8rem 1.5rem;
+    padding: 0.5rem 1.5rem;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     border-bottom: 3px solid var(--biscuit-dark);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-    flex-wrap: wrap;
-    gap: 0.8rem;
+    gap: 1rem;
 }
 
 .header-logo {
     height: 36px;
     width: auto;
     filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* 書き出しボタン */
+.btn-export {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-export:hover {
+    background: linear-gradient(135deg, #ff8080, #ff6060);
+    transform: translateY(-1px);
+}
+
+/* レイヤー追加ボタンエリア */
+.layer-add-buttons {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.btn-add-image {
+    width: 100%;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--biscuit-dark), var(--biscuit-medium));
+    color: var(--chocolate-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-add-image:hover {
+    background: var(--biscuit-light);
+}
+
+/* ===== キャンバス上部ツールバー ===== */
+.canvas-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.3);
+    padding: 6px 12px;
+    border-radius: 0;
+    flex-wrap: wrap;
+}
+
+.toolbar-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--biscuit-light);
+    cursor: pointer;
+}
+
+.toolbar-checkbox input {
+    cursor: pointer;
 }
 
 /* ===== ヘッダーツールバー ===== */
@@ -567,18 +632,90 @@ body {
 
 .timeline-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 1rem;
     background: var(--chocolate-medium);
     border-bottom: 2px solid var(--border-color);
-    gap: 1rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .timeline-title {
     font-weight: bold;
     color: var(--biscuit-light);
-    font-size: 1rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+/* ===== 再生コントロール ===== */
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--chocolate-dark);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.playback-btn {
+    background: var(--chocolate-light);
+    border: 1px solid var(--border-color);
+    color: var(--text-light);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.playback-btn:hover {
+    background: var(--biscuit-dark);
+    color: var(--chocolate-dark);
+}
+
+.loop-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.loop-checkbox input {
+    cursor: pointer;
+}
+
+.fps-selector {
+    display: flex;
+    gap: 2px;
+}
+
+.fps-btn {
+    padding: 4px 6px;
+    background: var(--chocolate-light);
+    color: var(--text-light);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: all 0.2s;
+}
+
+.fps-btn:hover {
+    background: var(--biscuit-dark);
+    color: var(--chocolate-dark);
+}
+
+.fps-btn.active {
+    background: var(--accent-gold);
+    color: var(--chocolate-dark);
 }
 
 /* ===== タイムラインズームコントロール ===== */
@@ -674,7 +811,8 @@ body {
     font-family: 'Courier New', monospace;
     color: var(--accent-gold);
     font-weight: bold;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    margin-left: auto;
 }
 
 .timeline-body {
@@ -1260,3 +1398,39 @@ body.offline .offline-indicator {
     display: block;
 }
 
+/* ===== Undo/Redo ボタン ===== */
+.undo-redo-buttons {
+    display: flex;
+    gap: 4px;
+    background: var(--chocolate-dark);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.icon-btn {
+    width: 28px;
+    height: 28px;
+    background: var(--chocolate-light);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.icon-btn:hover:not(:disabled) {
+    background: var(--biscuit-dark);
+    color: var(--chocolate-dark);
+}
+
+.icon-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.icon-btn-text {
+    font-size: 14px;
+}

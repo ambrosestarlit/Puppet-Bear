@@ -1,15 +1,16 @@
 /**
- * 🐻 Puppet Bear v1.13.0
+ * 🐻 Puppet Bear v1.14.0
  * Service Worker - PWAオフライン対応
  */
 
-const CACHE_NAME = 'puppet-bear-v1.13.0';
+const CACHE_NAME = 'puppet-bear-v1.14.0';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './styles.css',
     './app.js',
     './app-core.js',
+    './app-history.js',
     './app-windsway.js',
     './app-bounce.js',
     './app-puppet.js',

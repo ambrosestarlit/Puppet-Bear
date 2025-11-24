@@ -343,6 +343,7 @@ function toggleLayerVisibility(layerId, event) {
 
 // ===== レイヤー削除 =====
 function deleteLayer(layerId, event) {
+    const isTopLevel = event !== null;
     if (event) event.stopPropagation();
     
     const layer = layers.find(l => l.id === layerId);
@@ -371,6 +372,11 @@ function deleteLayer(layerId, event) {
     updateLayerList();
     updatePropertiesPanel();
     render();
+    
+    // 最上位の削除操作の場合のみ履歴保存
+    if (isTopLevel && typeof saveHistory === 'function') {
+        saveHistory();
+    }
 }
 
 // ===== フォルダの開閉 =====
@@ -480,6 +486,11 @@ function createFolderFromSelection() {
     updateLayerList();
     updatePropertiesPanel();
     render();
+    
+    // 履歴を保存
+    if (typeof saveHistory === 'function') {
+        saveHistory();
+    }
 }
 
 // ===== 口パクレイヤー作成 =====
@@ -527,6 +538,11 @@ function createLipSyncLayer() {
             updateLayerList();
             selectLayer(layer.id, false);
             render();
+            
+            // 履歴を保存
+            if (typeof saveHistory === 'function') {
+                saveHistory();
+            }
         });
     };
     input.click();
@@ -577,6 +593,11 @@ function createBlinkLayer() {
             updateLayerList();
             selectLayer(layer.id, false);
             render();
+            
+            // 履歴を保存
+            if (typeof saveHistory === 'function') {
+                saveHistory();
+            }
         });
     };
     input.click();
@@ -731,6 +752,11 @@ function createBounceLayer() {
                 }
                 
                 render();
+                
+                // 履歴を保存
+                if (typeof saveHistory === 'function') {
+                    saveHistory();
+                }
             };
             img.src = e.target.result;
         };

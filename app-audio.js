@@ -70,6 +70,11 @@ function addAudioClipToLayer(layerId) {
         updateLayerList();
         updateTimeline();
         updatePropertiesPanel();
+        
+        // 履歴を保存
+        if (typeof saveHistory === 'function') {
+            saveHistory();
+        }
     };
     
     input.click();

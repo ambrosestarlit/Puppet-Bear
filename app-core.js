@@ -65,6 +65,11 @@ function loadImage(file) {
             }
             
             render();
+            
+            // 履歴を保存
+            if (typeof saveHistory === 'function') {
+                saveHistory();
+            }
         };
         img.src = e.target.result;
     };
