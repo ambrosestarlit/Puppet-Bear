@@ -8,6 +8,13 @@
 
 // ===== 画像読み込み =====
 function loadImage(file) {
+    // loadImageWithOriginalNameを使用（app-layers.jsで定義）
+    if (typeof loadImageWithOriginalName === 'function') {
+        loadImageWithOriginalName(file);
+        return;
+    }
+    
+    // フォールバック
     const reader = new FileReader();
     reader.onload = (e) => {
         const img = new Image();
@@ -23,20 +30,14 @@ function loadImage(file) {
                 height: img.height,
                 rotation: 0,
                 scale: 1,
-                opacity: 1.0, // 不透明度
+                opacity: 1.0,
                 anchorX: 0.5,
                 anchorY: 0.5,
                 visible: true,
-                blendMode: 'source-over', // ブレンドモード
-                
-                // パペット機能
+                blendMode: 'source-over',
                 parentLayerId: null,
-                
-                // 風揺れ機能
                 windSwayEnabled: false,
                 windSwayParams: getDefaultWindSwayParams(),
-                
-                // 色抜きクリッピング機能
                 colorClipping: {
                     enabled: false,
                     referenceLayerId: null,
@@ -44,8 +45,6 @@ function loadImage(file) {
                     tolerance: 30,
                     invertClipping: false
                 },
-                
-                // デフォルトキーフレーム（フレーム0に初期位置を設定）
                 keyframes: [{
                     frame: 0,
                     x: canvas.width / 2,
@@ -58,16 +57,14 @@ function loadImage(file) {
             
             layers.push(layer);
             updateLayerList();
-            selectLayer(layer.id, false); // 単一選択
+            selectLayer(layer.id, false);
             
-            // 初期キーフレームを適用
             if (typeof applyKeyframeInterpolation === 'function') {
                 applyKeyframeInterpolation();
             }
             
             render();
             
-            // 履歴を保存
             if (typeof saveHistory === 'function') {
                 saveHistory();
             }
@@ -648,4 +645,91 @@ function applyParentTransform(layer) {
     
     // 親のスケール（アンカーポイントを中心に）
     ctx.scale(parent.scale, parent.scale);
+}
+
+// ===== フォルダ内レイヤーを風揺れ付きで描画 =====
+function drawFolderWithWindSway(folder, localTime) {
+    if (!folder || folder.type !== 'folder' || !folder.windSwayEnabled) return;
+    
+    // フォルダの子レイヤーを取得
+    const childLayers = layers.filter(l => l.parentLayerId === folder.id);
+    if (childLayers.length === 0) return;
+    
+    // フォルダの変形を計算
+    const folderAnchorOffsetX = folder.anchorOffsetX || 0;
+    const folderAnchorOffsetY = folder.anchorOffsetY || 0;
+    
+    // 各子レイヤーを描画
+    childLayers.forEach(layer => {
+        if (!layer.visible) return;
+        if (!layer.img) return;
+        
+        ctx.save();
+        
+        // 不透明度とブレンドモードを適用
+        ctx.globalAlpha = layer.opacity !== undefined ? layer.opacity : 1.0;
+        ctx.globalCompositeOperation = layer.blendMode || 'source-over';
+        
+        // フォルダの位置に移動
+        ctx.translate(folder.x, folder.y);
+        
+        // 歩行アニメーションのオフセットを適用
+        if (folder.walkingEnabled && typeof calculateWalkingOffset === 'function') {
+            const walkingOffset = calculateWalkingOffset(folder, localTime);
+            if (walkingOffset.active) {
+                ctx.translate(walkingOffset.x, walkingOffset.y);
+            }
+        }
+        
+        // フォルダのアンカーポイントを適用
+        ctx.translate(folderAnchorOffsetX, folderAnchorOffsetY);
+        
+        // フォルダの回転とスケールを適用
+        ctx.rotate(folder.rotation * Math.PI / 180);
+        ctx.scale(folder.scale, folder.scale);
+        
+        // 子レイヤーの位置に移動
+        ctx.translate(layer.x, layer.y);
+        
+        // アンカーポイントのオフセット
+        const anchorOffsetX = layer.anchorX * layer.width;
+        const anchorOffsetY = layer.anchorY * layer.height;
+        
+        // アンカーポイントを原点に移動
+        ctx.translate(anchorOffsetX - layer.width / 2, anchorOffsetY - layer.height / 2);
+        
+        // 子レイヤーの回転とスケールを適用
+        ctx.rotate(layer.rotation * Math.PI / 180);
+        ctx.scale(layer.scale, layer.scale);
+        
+        // 風揺れを適用して描画（フォルダの風揺れパラメータを使用）
+        if (typeof applyWindShakeWebGL === 'function') {
+            applyWindShakeWebGL(ctx, layer.img, layer.width, layer.height, localTime, folder.windSwayParams, layer.anchorX, layer.anchorY);
+        } else {
+            // 風揺れが使用できない場合は通常描画
+            ctx.drawImage(layer.img, -anchorOffsetX, -anchorOffsetY, layer.width, layer.height);
+        }
+        
+        // アンカーポイント表示（書き出し中は描画しない）
+        if (typeof isExporting === 'undefined' || !isExporting) {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-25, 0);
+            ctx.lineTo(25, 0);
+            ctx.moveTo(0, -25);
+            ctx.lineTo(0, 25);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    });
 }

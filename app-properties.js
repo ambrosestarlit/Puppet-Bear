@@ -1,6 +1,7 @@
 /**
- * ⭐ Starlit Puppet Editor v1.14.1
+ * ⭐ Starlit Puppet Editor v1.14.2
  * プロパティパネル - UI最適化版
+ * - レイヤー種類変更機能を追加
  * - アンカーポイント設定に警告メッセージを追加
  * - トランスフォームスライダーと数値入力の同期を改善
  * - ヘッダーツールバーに操作ツール・アンカー設定を配置
@@ -10,6 +11,132 @@
  */
 
 // ===== 共通UI生成関数 =====
+
+// レイヤー種類変更UI
+function generateLayerTypeUI(layer) {
+    // フォルダと音声は変更不可
+    if (layer.type === 'folder' || layer.type === 'audio') {
+        return '';
+    }
+    
+    // 変更可能な種類（画像を持つレイヤーのみ）
+    const types = [
+        { value: 'image', label: '🖼️ 画像', desc: '通常の画像レイヤー' },
+        { value: 'puppet', label: '🎭 パペット', desc: 'ハンドル操作で動かせる' },
+        { value: 'bounce', label: '🎈 揺れモーション', desc: '自動で揺れるアニメ' }
+    ];
+    
+    return `
+        <div class="property-group" style="background: linear-gradient(135deg, rgba(255,165,0,0.1), rgba(255,140,0,0.1)); border: 1px solid var(--accent-orange);">
+            <h4>🔄 レイヤー種類変更</h4>
+            <select id="layer-type-select" onchange="changeLayerType(this.value)"
+                style="width: 100%; padding: 8px; background: var(--chocolate-dark); color: var(--biscuit-light); border: 1px solid var(--accent-orange); border-radius: 4px; font-size: 13px;">
+                ${types.map(t => `<option value="${t.value}" ${layer.type === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
+            <div style="font-size: 10px; color: var(--biscuit); margin-top: 6px;">
+                ${types.find(t => t.value === layer.type)?.desc || ''}
+            </div>
+        </div>
+    `;
+}
+
+// レイヤー種類を変更
+function changeLayerType(newType) {
+    const layer = layers.find(l => l.id === selectedLayerIds[0]);
+    if (!layer || !layer.img) return;
+    
+    const oldType = layer.type;
+    if (oldType === newType) return;
+    
+    // 確認ダイアログ
+    if (!confirm(`レイヤー種類を「${getLayerTypeName(oldType)}」から「${getLayerTypeName(newType)}」に変更しますか？\n\n※一部の設定がリセットされる場合があります`)) {
+        document.getElementById('layer-type-select').value = oldType;
+        return;
+    }
+    
+    // 種類を変更
+    layer.type = newType;
+    
+    // 新しい種類に必要なプロパティを追加
+    switch (newType) {
+        case 'image':
+            // 画像レイヤーの基本プロパティ
+            if (!layer.colorClipping) {
+                layer.colorClipping = {
+                    enabled: false,
+                    referenceLayerId: null,
+                    color: { r: 0, g: 255, b: 0 },
+                    tolerance: 30,
+                    invertClipping: false
+                };
+            }
+            break;
+            
+        case 'puppet':
+            // パペットレイヤーのプロパティ
+            if (!layer.puppetParams) {
+                layer.puppetParams = {
+                    handleAnchorX: 0.5,
+                    handleAnchorY: 1.0,
+                    axisAnchorX: 0.5,
+                    axisAnchorY: 0.0,
+                    bendStrength: 0.3,
+                    divisions: 20,
+                    rotationLimit: 45,
+                    autoReturn: true,
+                    returnSpeed: 0.1,
+                    intermediatePins: [],
+                    fixedPins: []
+                };
+            }
+            break;
+            
+        case 'bounce':
+            // 揺れモーションレイヤーのプロパティ
+            if (!layer.bounceParams) {
+                layer.bounceParams = typeof getDefaultBounceParams === 'function' 
+                    ? getDefaultBounceParams() 
+                    : {
+                        enabled: true,
+                        amplitude: 10,
+                        frequency: 2,
+                        phase: 0,
+                        direction: 'vertical',
+                        easing: 'sine',
+                        anchorX: 0.5,
+                        anchorY: 1.0,
+                        pins: []
+                    };
+            }
+            break;
+    }
+    
+    // UI更新
+    updateLayerList();
+    updatePropertiesPanel();
+    render();
+    
+    // 履歴保存
+    if (typeof saveHistory === 'function') {
+        saveHistory();
+    }
+    
+    console.log(`✅ レイヤー "${layer.name}" の種類を ${oldType} → ${newType} に変更しました`);
+}
+
+// レイヤー種類の日本語名を取得
+function getLayerTypeName(type) {
+    switch (type) {
+        case 'image': return '画像';
+        case 'puppet': return 'パペット';
+        case 'bounce': return '揺れモーション';
+        case 'folder': return 'フォルダ';
+        case 'lipsync': return '口パク';
+        case 'blink': return 'まばたき';
+        case 'audio': return '音声';
+        default: return type;
+    }
+}
 
 // ヘッダーツールバーの更新
 function updateHeaderToolbar() {
@@ -296,6 +423,8 @@ function updatePropertiesPanel() {
     propertiesPanel.innerHTML = `
         <h3>${layer.name}</h3>
         
+        ${generateLayerTypeUI(layer)}
+        
         ${generateTransformUI(layer)}
         
         ${generateBlendModeUI(layer)}
@@ -519,6 +648,8 @@ function updatePropertiesPanel() {
         propertiesPanel.innerHTML = `
             <h3>🎈 ${layer.name}</h3>
             
+            ${generateLayerTypeUI(layer)}
+            
             ${generateTransformUI(layer)}
             
             ${generateBlendModeUI(layer)}
@@ -679,6 +810,8 @@ function updatePropertiesPanel() {
         
         propertiesPanel.innerHTML = `
             <h3>🎭 ${layer.name}</h3>
+            
+            ${generateLayerTypeUI(layer)}
             
             ${generateTransformUI(layer)}
             

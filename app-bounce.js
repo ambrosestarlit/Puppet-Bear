@@ -688,8 +688,21 @@ function getWorldTransformForLayer(layer) {
         const rotatedX = scaledX * cos - scaledY * sin;
         const rotatedY = scaledX * sin + scaledY * cos;
         
-        x = parent.x + rotatedX;
-        y = parent.y + rotatedY;
+        // 親の位置を加算
+        let parentX = parent.x;
+        let parentY = parent.y;
+        
+        // ★ フォルダの歩行アニメーションオフセットを追加 ★
+        if (parent.type === 'folder' && parent.walkingEnabled && typeof calculateWalkingOffset === 'function') {
+            const walkingOffset = calculateWalkingOffset(parent, currentTime);
+            if (walkingOffset.active) {
+                parentX += walkingOffset.x;
+                parentY += walkingOffset.y;
+            }
+        }
+        
+        x = parentX + rotatedX;
+        y = parentY + rotatedY;
         rotation += parent.rotation;
         scale *= parent.scale;
         

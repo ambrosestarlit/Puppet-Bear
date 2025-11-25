@@ -1,11 +1,12 @@
 /**
- * ⭐ Starlit Puppet Editor v1.8.7
- * 風揺れエフェクト - 変形曲線を滑らか化 + モード競合修正
+ * ⭐ Starlit Puppet Editor v1.8.8
+ * 風揺れエフェクト - 描画範囲に応じた揺れスケーリング
+ * - 描画範囲（透明部分を除いた実際のコンテンツ範囲）を計算
+ * - 小さいパーツでも自然な揺れを実現
  * - メッシュ分割数を増やして変形を滑らかに
  * - smoothstep/smootherstep補間を実装
  * - ピンの影響範囲をより滑らかに
  * - アンカーポイントからの減衰を自然に
- * - ピンモードとアンカー設定モードの競合を修正
  */
 
 // ===== WebGL関連 =====
@@ -19,6 +20,13 @@ let pinMode = false;
 let pinRange = 20;
 let pinElements = [];
 let showPins = true; // ピンの表示/非表示フラグ
+
+// ===== 描画範囲キャッシュ =====
+const contentBoundsCache = new WeakMap();
+
+// ===== 描画範囲計算用キャンバス =====
+let boundsCalculationCanvas = null;
+let boundsCalculationCtx = null;
 
 // ===== デフォルトパラメータ =====
 function getDefaultWindSwayParams() {
@@ -34,7 +42,8 @@ function getDefaultWindSwayParams() {
         randomSwing: true,
         randomPattern: 5,
         seed: 12345,
-        pins: []
+        pins: [],
+        useContentBounds: true // 描画範囲に応じたスケーリングを有効化
     };
 }
 
@@ -169,12 +178,118 @@ function cosineInterpolation(edge0, edge1, x) {
     return (1 - Math.cos(t * Math.PI)) * 0.5;
 }
 
-// ===== 風揺れメッシュ生成（元のコードと完全一致） =====
-function createWindShakeMeshWithBounds(ws, width, height, t, anchorX, anchorY) {
+// ===== 画像の描画範囲（コンテンツバウンズ）を計算 =====
+function calculateContentBounds(img) {
+    // キャッシュをチェック
+    if (contentBoundsCache.has(img)) {
+        return contentBoundsCache.get(img);
+    }
+    
+    // 計算用キャンバスを初期化
+    if (!boundsCalculationCanvas) {
+        boundsCalculationCanvas = document.createElement('canvas');
+        boundsCalculationCtx = boundsCalculationCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    
+    const width = img.width;
+    const height = img.height;
+    
+    boundsCalculationCanvas.width = width;
+    boundsCalculationCanvas.height = height;
+    boundsCalculationCtx.clearRect(0, 0, width, height);
+    boundsCalculationCtx.drawImage(img, 0, 0);
+    
+    const imageData = boundsCalculationCtx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    
+    let minX = width;
+    let maxX = 0;
+    let minY = height;
+    let maxY = 0;
+    let hasContent = false;
+    
+    // 透明でないピクセルの範囲を検出（アルファ値 > 10 をコンテンツとみなす）
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const alpha = data[idx + 3];
+            
+            if (alpha > 10) {
+                hasContent = true;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    
+    // コンテンツがない場合は画像全体を返す
+    if (!hasContent) {
+        const bounds = {
+            minX: 0,
+            maxX: width,
+            minY: 0,
+            maxY: height,
+            width: width,
+            height: height,
+            contentWidth: width,
+            contentHeight: height,
+            // 描画範囲の中心（画像座標系、0-1）
+            contentCenterX: 0.5,
+            contentCenterY: 0.5,
+            // 描画範囲の上端と下端（画像座標系、0-1）
+            contentTop: 0,
+            contentBottom: 1
+        };
+        contentBoundsCache.set(img, bounds);
+        return bounds;
+    }
+    
+    const contentWidth = maxX - minX + 1;
+    const contentHeight = maxY - minY + 1;
+    
+    const bounds = {
+        minX: minX,
+        maxX: maxX + 1,
+        minY: minY,
+        maxY: maxY + 1,
+        width: width,
+        height: height,
+        contentWidth: contentWidth,
+        contentHeight: contentHeight,
+        // 描画範囲の中心（画像座標系、0-1）
+        contentCenterX: (minX + contentWidth / 2) / width,
+        contentCenterY: (minY + contentHeight / 2) / height,
+        // 描画範囲の上端と下端（画像座標系、0-1）
+        contentTop: minY / height,
+        contentBottom: (maxY + 1) / height
+    };
+    
+    // キャッシュに保存
+    contentBoundsCache.set(img, bounds);
+    
+    return bounds;
+}
+
+// ===== 風揺れメッシュ生成（描画範囲ベースの変形） =====
+function createWindShakeMeshWithBounds(ws, width, height, t, anchorX, anchorY, img = null) {
     let N = Math.floor(ws.divisions);
     if (N < 1) N = 1;
     if (N > 50) N = 50;
     const M = 8; // 固定
+    
+    // 描画範囲を取得
+    let contentTop = 0;
+    let contentBottom = 1;
+    let contentHeight = height;
+    
+    if (ws.useContentBounds !== false && img) {
+        const contentBounds = calculateContentBounds(img);
+        contentTop = contentBounds.contentTop;
+        contentBottom = contentBounds.contentBottom;
+        contentHeight = contentBounds.contentHeight;
+    }
     
     const F = Math.PI * ws.angle / 180;
     const dt = ws.period;
@@ -201,9 +316,6 @@ function createWindShakeMeshWithBounds(ws, width, height, t, anchorX, anchorY) {
     // 中心線計算（アンカーポイントから上下に分けて計算）
     const centerX = [], centerY = [];
     
-    // アンカーポイントの位置（中心を0とした座標系）
-    const anchorYInMesh = (anchorYPos - 0.5) * height;
-    
     for (let i = 0; i <= N; i++) {
         const ratio = i / N;
         const yInTexture = ratio; // テクスチャ座標系（0-1）
@@ -218,7 +330,6 @@ function createWindShakeMeshWithBounds(ws, width, height, t, anchorX, anchorY) {
                 const range = pin.range / 100;
                 if (distance < range) {
                     const normalizedDist = distance / range;
-                    // smootherstepを使用してより滑らかな減衰を実現
                     const multiplier = smootherstep(0, 1, normalizedDist);
                     minMultiplier = Math.min(minMultiplier, multiplier);
                 }
@@ -226,24 +337,45 @@ function createWindShakeMeshWithBounds(ws, width, height, t, anchorX, anchorY) {
             pinMultiplier = minMultiplier;
         }
         
-        // アンカーポイントからの距離に応じて揺れの強さを計算
-        let swayStrength;
-        if (yInTexture <= anchorYPos) {
-            // アンカーより上
-            const distanceFromAnchor = anchorYPos - yInTexture;
-            const linearStrength = distanceFromAnchor / anchorYPos; // 0-1
-            // smoothstepを適用してより自然な減衰に
-            swayStrength = smoothstep(0, 1, linearStrength);
-        } else {
-            // アンカーより下
-            const distanceFromAnchor = yInTexture - anchorYPos;
-            const linearStrength = distanceFromAnchor / (1 - anchorYPos); // 0-1
-            // smoothstepを適用してより自然な減衰に
-            swayStrength = smoothstep(0, 1, linearStrength);
+        // ★ 描画範囲内での相対位置を計算 ★
+        // yInTextureが描画範囲外なら揺れを0にする
+        let swayStrength = 0;
+        
+        if (yInTexture >= contentTop && yInTexture <= contentBottom) {
+            // 描画範囲内での正規化された位置（0-1）
+            const normalizedYInContent = (yInTexture - contentTop) / (contentBottom - contentTop);
+            
+            // アンカーポイントを描画範囲内での位置に変換
+            let anchorInContent;
+            if (anchorYPos >= contentTop && anchorYPos <= contentBottom) {
+                anchorInContent = (anchorYPos - contentTop) / (contentBottom - contentTop);
+            } else if (anchorYPos < contentTop) {
+                anchorInContent = 0;
+            } else {
+                anchorInContent = 1;
+            }
+            
+            // アンカーポイントからの距離に応じて揺れの強さを計算
+            if (normalizedYInContent <= anchorInContent) {
+                // アンカーより上
+                if (anchorInContent > 0) {
+                    const distanceFromAnchor = anchorInContent - normalizedYInContent;
+                    const linearStrength = distanceFromAnchor / anchorInContent;
+                    swayStrength = smoothstep(0, 1, linearStrength);
+                }
+            } else {
+                // アンカーより下
+                if (anchorInContent < 1) {
+                    const distanceFromAnchor = normalizedYInContent - anchorInContent;
+                    const linearStrength = distanceFromAnchor / (1 - anchorInContent);
+                    swayStrength = smoothstep(0, 1, linearStrength);
+                }
+            }
         }
         
-        // 揺れの計算
-        const Si = (currentF * Math.sin(c * t - i * d / N) + CNT) * swayStrength * pinMultiplier;
+        // 揺れの計算（描画範囲内での位相を使用）
+        const contentPhaseIndex = (yInTexture - contentTop) / (contentBottom - contentTop) * N;
+        const Si = (currentF * Math.sin(c * t - contentPhaseIndex * d / N) + CNT) * swayStrength * pinMultiplier;
         
         // X座標の計算（前の点からの相対位置）
         if (i === 0) {
@@ -369,8 +501,8 @@ function applyWindShakeWebGL(layerCtx, img, width, height, localTime, windSwayPa
     const gl = windShakeGL;
     const canvas = windShakeCanvas;
     
-    // メッシュを生成してバウンディングボックスを取得（アンカー座標を渡す）
-    const meshData = createWindShakeMeshWithBounds(windSwayParams, width, height, localTime, anchorX, anchorY);
+    // メッシュを生成してバウンディングボックスを取得（アンカー座標とimgを渡す）
+    const meshData = createWindShakeMeshWithBounds(windSwayParams, width, height, localTime, anchorX, anchorY, img);
     
     // バウンディングボックスのサイズを計算（余裕を持たせる）
     const padding = 200;

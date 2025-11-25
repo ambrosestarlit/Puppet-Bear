@@ -526,6 +526,11 @@ function renderBounceKeyframe(layer, kfIndex, y) {
     timelineContent.appendChild(keyframeEl);
 }
 
+// ===== 歩行キーフレームドラッグ変数 =====
+let selectedWalkingKeyframe = null;
+let isDraggingWalkingKeyframe = false;
+let walkingKeyframeDragStart = { x: 0, frame: 0 };
+
 // ===== 歩行キーフレーム描画 =====
 function renderWalkingKeyframe(layer, kfIndex, y) {
     const timelineContent = document.getElementById('timeline-content');
@@ -548,9 +553,32 @@ function renderWalkingKeyframe(layer, kfIndex, y) {
         keyframeEl.style.background = 'linear-gradient(135deg, #f44336, #d32f2f)';
     }
     
+    // 選択状態の表示
+    if (selectedWalkingKeyframe && 
+        selectedWalkingKeyframe.layerId === layer.id && 
+        selectedWalkingKeyframe.index === kfIndex) {
+        keyframeEl.classList.add('selected');
+    }
+    
     keyframeEl.dataset.layerId = layer.id;
     keyframeEl.dataset.walkingKeyframeIndex = kfIndex;
     
+    // マウスダウンイベント（ドラッグ開始）
+    keyframeEl.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        handleWalkingKeyframeMouseDown(e, layer.id, kfIndex);
+    });
+    
+    // タッチスタートイベント（ドラッグ開始）
+    keyframeEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.touches.length === 1) {
+            handleWalkingKeyframeTouchStart(e.touches[0], layer.id, kfIndex);
+        }
+    }, { passive: false });
+    
+    // クリックイベント（時間移動）
     keyframeEl.addEventListener('click', (e) => {
         e.stopPropagation();
         // キーフレームの時間に移動
@@ -562,20 +590,111 @@ function renderWalkingKeyframe(layer, kfIndex, y) {
         render();
     });
     
-    keyframeEl.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // キーフレームの時間に移動
-        currentTime = kf.frame / projectFPS;
-        updatePlayhead();
-        if (typeof applyKeyframeInterpolation === 'function') {
-            applyKeyframeInterpolation();
-        }
-        render();
-    }, { passive: false });
-    
     timelineContent.appendChild(keyframeEl);
 }
+
+// ===== 歩行キーフレーム マウスダウン処理 =====
+function handleWalkingKeyframeMouseDown(e, layerId, kfIndex) {
+    e.stopPropagation();
+    isDraggingWalkingKeyframe = true;
+    selectedWalkingKeyframe = { layerId, index: kfIndex };
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (layer && layer.walkingParams && layer.walkingParams.keyframes[kfIndex]) {
+        walkingKeyframeDragStart.frame = layer.walkingParams.keyframes[kfIndex].frame;
+        walkingKeyframeDragStart.x = e.clientX;
+    }
+    
+    updateTimeline();
+}
+
+// ===== 歩行キーフレーム タッチスタート処理 =====
+function handleWalkingKeyframeTouchStart(touch, layerId, kfIndex) {
+    isDraggingWalkingKeyframe = true;
+    selectedWalkingKeyframe = { layerId, index: kfIndex };
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (layer && layer.walkingParams && layer.walkingParams.keyframes[kfIndex]) {
+        walkingKeyframeDragStart.frame = layer.walkingParams.keyframes[kfIndex].frame;
+        walkingKeyframeDragStart.x = touch.clientX;
+    }
+    
+    updateTimeline();
+}
+
+// ===== 歩行キーフレーム マウスムーブ処理 =====
+document.addEventListener('mousemove', (e) => {
+    if (isDraggingWalkingKeyframe && selectedWalkingKeyframe) {
+        const deltaX = e.clientX - walkingKeyframeDragStart.x;
+        const deltaFrame = Math.round(deltaX / timelinePixelsPerFrame);
+        const newFrame = Math.max(0, walkingKeyframeDragStart.frame + deltaFrame);
+        
+        const layer = layers.find(l => l.id === selectedWalkingKeyframe.layerId);
+        if (layer && layer.walkingParams && layer.walkingParams.keyframes[selectedWalkingKeyframe.index]) {
+            layer.walkingParams.keyframes[selectedWalkingKeyframe.index].frame = newFrame;
+            updateTimeline();
+        }
+    }
+});
+
+// ===== 歩行キーフレーム タッチムーブ処理 =====
+document.addEventListener('touchmove', (e) => {
+    if (isDraggingWalkingKeyframe && selectedWalkingKeyframe && e.touches.length === 1) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - walkingKeyframeDragStart.x;
+        const deltaFrame = Math.round(deltaX / timelinePixelsPerFrame);
+        const newFrame = Math.max(0, walkingKeyframeDragStart.frame + deltaFrame);
+        
+        const layer = layers.find(l => l.id === selectedWalkingKeyframe.layerId);
+        if (layer && layer.walkingParams && layer.walkingParams.keyframes[selectedWalkingKeyframe.index]) {
+            layer.walkingParams.keyframes[selectedWalkingKeyframe.index].frame = newFrame;
+            updateTimeline();
+        }
+    }
+}, { passive: false });
+
+// ===== 歩行キーフレーム マウスアップ処理 =====
+document.addEventListener('mouseup', () => {
+    if (isDraggingWalkingKeyframe) {
+        isDraggingWalkingKeyframe = false;
+        if (typeof updatePropertiesPanel === 'function') {
+            updatePropertiesPanel();
+        }
+    }
+});
+
+// ===== 歩行キーフレーム タッチエンド処理 =====
+document.addEventListener('touchend', () => {
+    if (isDraggingWalkingKeyframe) {
+        isDraggingWalkingKeyframe = false;
+        if (typeof updatePropertiesPanel === 'function') {
+            updatePropertiesPanel();
+        }
+    }
+});
+
+document.addEventListener('touchcancel', () => {
+    if (isDraggingWalkingKeyframe) {
+        isDraggingWalkingKeyframe = false;
+    }
+});
+
+// ===== 歩行キーフレーム Delete キー処理 =====
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && selectedWalkingKeyframe) {
+        const layer = layers.find(l => l.id === selectedWalkingKeyframe.layerId);
+        if (layer && layer.walkingParams && layer.walkingParams.keyframes) {
+            layer.walkingParams.keyframes.splice(selectedWalkingKeyframe.index, 1);
+            selectedWalkingKeyframe = null;
+            updateTimeline();
+            if (typeof updatePropertiesPanel === 'function') {
+                updatePropertiesPanel();
+            }
+            render();
+        }
+    }
+});
 
 // ===== レイヤー展開/折りたたみ =====
 function toggleLayerExpansion(layerId) {

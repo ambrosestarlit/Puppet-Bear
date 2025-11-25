@@ -1,12 +1,10 @@
 /**
- * ⭐ Starlit Puppet Editor v1.11.0
- * レイヤーリスト・フォルダ機能（音声レイヤー対応）
+ * ⭐ Starlit Puppet Editor v1.12.0
+ * レイヤーリスト・フォルダ機能
+ * - チェックボックスによる複数選択（タブレット対応）
+ * - ZIP/PSD一括読み込み
+ * - レイヤー種類変更機能
  * - フォルダ同士の親子関係表示対応
- * - レイヤー順序修正: 上が前面に表示
- * - 親子関係の表示問題を修正
- * - 口パクレイヤー追加
- * - まばたきレイヤー追加
- * - 音声レイヤー追加
  */
 
 // ===== レイヤーリスト更新 =====
@@ -18,6 +16,8 @@ function updateLayerList() {
     header.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: var(--chocolate-medium); border-radius: 4px;';
     header.innerHTML = `
         <span style="flex: 1; font-weight: bold; color: var(--biscuit-light);">📚 レイヤー</span>
+        <button onclick="selectAllLayers()" style="padding: 4px 8px; background: var(--chocolate-light); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;" title="全選択">☑️</button>
+        <button onclick="deselectAllLayers()" style="padding: 4px 8px; background: var(--chocolate-light); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;" title="選択解除">☐</button>
         <button onclick="showRenameDialog()" style="padding: 4px 8px; background: var(--accent-orange); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">✏️ リネーム</button>
     `;
     layerList.appendChild(header);
@@ -25,7 +25,7 @@ function updateLayerList() {
     // 説明
     const info = document.createElement('div');
     info.style.cssText = 'font-size: 11px; color: var(--biscuit); padding: 4px 8px; margin-bottom: 8px; background: var(--chocolate-dark); border-radius: 4px;';
-    info.innerHTML = '💡 上のレイヤーが前面に表示されます<br>📁 フォルダ作成時、既存の親子関係は維持されます';
+    info.innerHTML = '💡 上のレイヤーが前面に表示されます<br>☑️ チェックボックスで複数選択';
     layerList.appendChild(info);
     
     // ルートレベルのレイヤーを表示（逆順：上にあるほど上に表示）
@@ -48,19 +48,18 @@ function updateLayerList() {
     folderBtn.onclick = createFolderFromSelection;
     buttonContainer.appendChild(folderBtn);
     
-    // 画像追加ボタン（口パクの上）
+    // 画像追加ボタン（ZIP/PSD対応）
     const imageBtn = document.createElement('button');
     imageBtn.id = 'add-image-btn';
-    imageBtn.textContent = '📷 画像追加';
+    imageBtn.textContent = '📷 画像/ZIP追加';
     imageBtn.style.cssText = 'width: 100%; padding: 8px; background: linear-gradient(135deg, var(--biscuit-dark), var(--biscuit-medium)); color: var(--chocolate-dark); border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; display: block !important; visibility: visible !important;';
     imageBtn.onclick = () => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'image/*';
+        input.accept = 'image/*,.zip,.psd';
+        input.multiple = true;
         input.onchange = (e) => {
-            if (e.target.files[0]) {
-                loadImage(e.target.files[0]);
-            }
+            handleImageFilesInput(e.target.files);
         };
         input.click();
     };
@@ -109,11 +108,272 @@ function updateLayerList() {
     }
 }
 
-// ===== レイヤーアイテムを再帰的に描画 =====
+// ===== 全選択/選択解除 =====
+function selectAllLayers() {
+    selectedLayerIds = layers.map(l => l.id);
+    updateLayerList();
+    updatePropertiesPanel();
+}
+
+function deselectAllLayers() {
+    selectedLayerIds = [];
+    updateLayerList();
+    updatePropertiesPanel();
+}
+
+// ===== 画像ファイル入力処理（ZIP/複数ファイル対応） =====
+async function handleImageFilesInput(files) {
+    if (!files || files.length === 0) return;
+    
+    const fileArray = Array.from(files);
+    
+    // ZIPファイルがあるか確認
+    const zipFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.zip'));
+    const imageFiles = fileArray.filter(f => !f.name.toLowerCase().endsWith('.zip') && !f.name.toLowerCase().endsWith('.psd'));
+    const psdFiles = fileArray.filter(f => f.name.toLowerCase().endsWith('.psd'));
+    
+    // ZIPファイルを処理
+    for (const zipFile of zipFiles) {
+        await loadImagesFromZip(zipFile);
+    }
+    
+    // PSDファイルを処理（簡易対応）
+    for (const psdFile of psdFiles) {
+        alert('PSDファイルは現在サポートされていません。PNGまたはZIPに変換してお使いください。');
+    }
+    
+    // 通常の画像ファイルを処理
+    if (imageFiles.length > 0) {
+        // 連番でソート
+        const sortedFiles = sortFilesByNumber(imageFiles);
+        for (const file of sortedFiles) {
+            await loadImageWithOriginalName(file);
+        }
+    }
+}
+
+// ===== ZIPから画像を一括読み込み =====
+async function loadImagesFromZip(zipFile) {
+    if (typeof JSZip === 'undefined') {
+        alert('JSZipライブラリが読み込まれていません。');
+        return;
+    }
+    
+    try {
+        const zip = await JSZip.loadAsync(zipFile);
+        const imageEntries = [];
+        
+        // 画像ファイルを抽出
+        zip.forEach((relativePath, zipEntry) => {
+            if (!zipEntry.dir) {
+                const lowerName = relativePath.toLowerCase();
+                if (lowerName.endsWith('.png') || lowerName.endsWith('.jpg') || 
+                    lowerName.endsWith('.jpeg') || lowerName.endsWith('.gif') ||
+                    lowerName.endsWith('.webp')) {
+                    imageEntries.push({
+                        path: relativePath,
+                        entry: zipEntry,
+                        // ファイル名のみ取得
+                        name: relativePath.split('/').pop()
+                    });
+                }
+            }
+        });
+        
+        // 連番でソート
+        imageEntries.sort((a, b) => {
+            return compareFileNames(a.name, b.name);
+        });
+        
+        // 画像を読み込み（逆順で追加して、若い番号が上に来るようにする）
+        for (let i = imageEntries.length - 1; i >= 0; i--) {
+            const entry = imageEntries[i];
+            const blob = await entry.entry.async('blob');
+            const dataUrl = await blobToDataURL(blob);
+            await loadImageFromDataURL(dataUrl, entry.name);
+        }
+        
+        console.log(`✅ ZIPから ${imageEntries.length} 枚の画像を読み込みました`);
+        
+    } catch (error) {
+        console.error('❌ ZIP読み込みエラー:', error);
+        alert('ZIPファイルの読み込みに失敗しました: ' + error.message);
+    }
+}
+
+// ===== ファイル名を連番でソート =====
+function sortFilesByNumber(files) {
+    return files.slice().sort((a, b) => {
+        return compareFileNames(a.name, b.name);
+    });
+}
+
+// ===== ファイル名比較（連番対応） =====
+function compareFileNames(nameA, nameB) {
+    // 数字を抽出して比較
+    const numA = extractNumber(nameA);
+    const numB = extractNumber(nameB);
+    
+    if (numA !== null && numB !== null) {
+        return numA - numB;
+    }
+    
+    // 数字がない場合は文字列比較
+    return nameA.localeCompare(nameB);
+}
+
+// ===== ファイル名から数字を抽出（先頭の連番優先） =====
+function extractNumber(filename) {
+    // ファイル名から数字部分を抽出
+    const match = filename.match(/(\d+)/g);
+    if (match && match.length > 0) {
+        // 先頭の数字を使用（001_ひも.png のようなパターンに対応）
+        return parseInt(match[0], 10);
+    }
+    return null;
+}
+
+// ===== BlobをDataURLに変換 =====
+function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// ===== DataURLから画像を読み込み =====
+function loadImageFromDataURL(dataUrl, filename) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const layer = createImageLayer(img, filename);
+            layers.push(layer);
+            updateLayerList();
+            render();
+            resolve(layer);
+        };
+        img.onerror = () => {
+            console.error('画像読み込みエラー:', filename);
+            resolve(null);
+        };
+        img.src = dataUrl;
+    });
+}
+
+// ===== オリジナルファイル名で画像を読み込み（タブレット対応強化） =====
+function loadImageWithOriginalName(file) {
+    return new Promise((resolve) => {
+        // ファイル名を確実に取得（タブレット対応強化）
+        let filename = '';
+        
+        // 1. まずwebkitRelativePathを確認（フォルダ選択時）
+        if (file.webkitRelativePath && file.webkitRelativePath.length > 0) {
+            filename = file.webkitRelativePath.split('/').pop();
+        }
+        
+        // 2. webkitRelativePathがない場合はnameを使用
+        if (!filename) {
+            filename = file.name;
+        }
+        
+        // 3. タブレットで数字のみになる問題に対応
+        // ファイル名が数字のみ、または拡張子がない場合
+        if (/^\d+$/.test(filename) || !filename.includes('.')) {
+            // MIMEタイプから拡張子を推定
+            let ext = '.png';
+            if (file.type) {
+                if (file.type.includes('jpeg') || file.type.includes('jpg')) ext = '.jpg';
+                else if (file.type.includes('gif')) ext = '.gif';
+                else if (file.type.includes('webp')) ext = '.webp';
+            }
+            
+            // 元のnameに拡張子がある場合はそれを使用
+            if (file.name && file.name.includes('.')) {
+                filename = file.name;
+            } else {
+                // タイムスタンプベースの名前を生成（最後の手段）
+                filename = `image_${Date.now()}${ext}`;
+            }
+        }
+        
+        // 4. 最終チェック：空の場合はデフォルト名
+        if (!filename || filename.trim() === '') {
+            filename = `image_${Date.now()}.png`;
+        }
+        
+        console.log(`📷 読み込み: ${filename} (元: ${file.name})`);
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const layer = createImageLayer(img, filename);
+                layers.push(layer);
+                updateLayerList();
+                selectLayer(layer.id, false);
+                render();
+                
+                if (typeof saveHistory === 'function') {
+                    saveHistory();
+                }
+                resolve(layer);
+            };
+            img.onerror = () => {
+                console.error('画像読み込みエラー:', filename);
+                resolve(null);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// ===== 画像レイヤー作成（共通処理） =====
+function createImageLayer(img, filename) {
+    return {
+        id: nextLayerId++,
+        type: 'image',
+        name: filename,
+        img: img,
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        width: img.width,
+        height: img.height,
+        rotation: 0,
+        scale: 1,
+        opacity: 1.0,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        visible: true,
+        blendMode: 'source-over',
+        parentLayerId: null,
+        windSwayEnabled: false,
+        windSwayParams: getDefaultWindSwayParams(),
+        colorClipping: {
+            enabled: false,
+            referenceLayerId: null,
+            color: { r: 0, g: 255, b: 0 },
+            tolerance: 30,
+            invertClipping: false
+        },
+        keyframes: [{
+            frame: 0,
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            rotation: 0,
+            scale: 1,
+            opacity: 1.0
+        }]
+    };
+}
+
+// ===== レイヤーアイテムを再帰的に描画（チェックボックス付き） =====
 function renderLayerItem(layer, depth) {
     const item = document.createElement('div');
     item.className = 'layer-item';
-    item.style.paddingLeft = `${depth * 20 + 12}px`;
+    item.style.paddingLeft = `${depth * 20 + 8}px`;
     item.draggable = true;
     item.dataset.layerId = layer.id;
     
@@ -129,120 +389,59 @@ function renderLayerItem(layer, depth) {
     item.addEventListener('drop', (e) => handleDrop(e, layer.id));
     item.addEventListener('dragend', (e) => handleDragEnd(e));
     
+    // チェックボックス
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'layer-checkbox';
+    checkbox.checked = selectedLayerIds.includes(layer.id);
+    checkbox.onclick = (e) => {
+        e.stopPropagation();
+        toggleLayerSelection(layer.id, checkbox.checked);
+    };
+    
+    // レイヤータイプに応じたアイコン
+    const typeIcon = getLayerTypeIcon(layer.type);
+    
+    // 風揺れアイコン
+    const windIcon = layer.windSwayEnabled ? '💨' : '';
+    
+    // 歩行アイコン（フォルダのみ）
+    const walkIcon = (layer.type === 'folder' && layer.walkingEnabled) ? '🚶' : '';
+    
+    // 親レイヤーがある場合のインジケータ
+    const hasParent = layer.parentLayerId != null;
+    const parentIndicator = hasParent ? '🔗' : '';
+    
+    // 子レイヤーの有無
+    const hasChildren = layers.some(l => l.parentLayerId === layer.id);
+    const childIndicator = hasChildren ? '📎' : '';
+    
     // フォルダの場合
     if (layer.type === 'folder') {
-        const expanded = layer.expanded !== false; // デフォルトは展開
-        
-        // 風揺れアイコン
-        const windIcon = layer.windSwayEnabled ? '💨' : '';
-        
-        // 歩行アイコン
-        const walkIcon = layer.walkingEnabled ? '🚶' : '';
-        
-        // 親レイヤーがある場合のインジケータ
-        const hasParent = layer.parentLayerId != null;
-        const parentIndicator = hasParent ? '🔗' : '';
+        const expanded = layer.expanded !== false;
         
         item.innerHTML = `
             <span class="folder-toggle" onclick="toggleFolder(${layer.id}, event)">${expanded ? '▼' : '▶'}</span>
-            <span class="layer-name">${windIcon}${walkIcon}${parentIndicator}📁 ${layer.name}</span>
+            <span class="layer-name">${windIcon}${walkIcon}${parentIndicator}${typeIcon} ${layer.name}</span>
             <span class="layer-controls">
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
             </span>
         `;
+        item.insertBefore(checkbox, item.firstChild);
         
         item.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('folder-toggle')) {
+            if (!e.target.classList.contains('folder-toggle') && e.target.type !== 'checkbox') {
                 selectLayer(layer.id, e.shiftKey);
             }
         });
         layerList.appendChild(item);
         
-        // 子レイヤーを表示（展開時のみ、逆順）
+        // 子レイヤーを表示（展開時のみ）
         if (expanded) {
             const children = layers.filter(l => l.parentLayerId === layer.id);
-            // 逆順で表示
             for (let i = children.length - 1; i >= 0; i--) {
                 renderLayerItem(children[i], depth + 1);
             }
-        }
-    }
-    // 口パクレイヤーの場合
-    else if (layer.type === 'lipsync') {
-        // 風揺れアイコン
-        const windIcon = layer.windSwayEnabled ? '💨' : '';
-        
-        // 子レイヤーの有無を確認
-        const hasChildren = layers.some(l => l.parentLayerId === layer.id);
-        const childIndicator = hasChildren ? '📎 ' : '';
-        
-        item.innerHTML = `
-            <span class="layer-name">${windIcon}${childIndicator}💬 ${layer.name}</span>
-            <span class="layer-controls">
-                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '👀‍🗨️'}</button>
-                <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
-        `;
-        
-        item.addEventListener('click', (e) => selectLayer(layer.id, e.shiftKey));
-        layerList.appendChild(item);
-        
-        // 子レイヤーを表示（逆順）
-        const children = layers.filter(l => l.parentLayerId === layer.id);
-        for (let i = children.length - 1; i >= 0; i--) {
-            renderLayerItem(children[i], depth + 1);
-        }
-    }
-    // まばたきレイヤーの場合
-    else if (layer.type === 'blink') {
-        // 風揺れアイコン
-        const windIcon = layer.windSwayEnabled ? '💨' : '';
-        
-        // 子レイヤーの有無を確認
-        const hasChildren = layers.some(l => l.parentLayerId === layer.id);
-        const childIndicator = hasChildren ? '📎 ' : '';
-        
-        item.innerHTML = `
-            <span class="layer-name">${windIcon}${childIndicator}👀 ${layer.name}</span>
-            <span class="layer-controls">
-                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '👀‍🗨️'}</button>
-                <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
-        `;
-        
-        item.addEventListener('click', (e) => selectLayer(layer.id, e.shiftKey));
-        layerList.appendChild(item);
-        
-        // 子レイヤーを表示（逆順）
-        const children = layers.filter(l => l.parentLayerId === layer.id);
-        for (let i = children.length - 1; i >= 0; i--) {
-            renderLayerItem(children[i], depth + 1);
-        }
-    }
-    // パペットレイヤーの場合
-    else if (layer.type === 'puppet') {
-        // 風揺れアイコン
-        const windIcon = layer.windSwayEnabled ? '💨' : '';
-        
-        // 子レイヤーの有無を確認
-        const hasChildren = layers.some(l => l.parentLayerId === layer.id);
-        const childIndicator = hasChildren ? '📎 ' : '';
-        
-        item.innerHTML = `
-            <span class="layer-name">${windIcon}${childIndicator}🎭 ${layer.name}</span>
-            <span class="layer-controls">
-                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '👀‍🗨️'}</button>
-                <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
-        `;
-        
-        item.addEventListener('click', (e) => selectLayer(layer.id, e.shiftKey));
-        layerList.appendChild(item);
-        
-        // 子レイヤーを表示（逆順）
-        const children2 = layers.filter(l => l.parentLayerId === layer.id);
-        for (let i = children2.length - 1; i >= 0; i--) {
-            renderLayerItem(children2[i], depth + 1);
         }
     }
     // 音声レイヤーの場合
@@ -250,45 +449,74 @@ function renderLayerItem(layer, depth) {
         const clipCount = layer.audioClips ? layer.audioClips.length : 0;
         
         item.innerHTML = `
-            <span class="layer-name">🎵 ${layer.name} <span style="font-size: 10px; color: #1db954;">(${clipCount}クリップ)</span></span>
+            <span class="layer-name">${typeIcon} ${layer.name} <span style="font-size: 10px; color: #1db954;">(${clipCount}クリップ)</span></span>
             <span class="layer-controls">
-                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '👀‍🗨️'}</button>
+                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '🙈'}</button>
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
             </span>
         `;
+        item.insertBefore(checkbox, item.firstChild);
         
         item.style.background = 'linear-gradient(135deg, #1a3d1a, #2d5a2d)';
         item.style.borderColor = '#1db954';
         
-        item.addEventListener('click', (e) => selectLayer(layer.id, e.shiftKey));
+        item.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') selectLayer(layer.id, e.shiftKey);
+        });
         layerList.appendChild(item);
     }
-    // 画像レイヤーの場合
+    // その他のレイヤー（画像、口パク、まばたき、パペット、バウンス）
     else {
-        // 風揺れアイコン
-        const windIcon = layer.windSwayEnabled ? '💨' : '';
-        
-        // 子レイヤーの有無を確認
-        const hasChildren = layers.some(l => l.parentLayerId === layer.id);
-        const childIndicator = hasChildren ? '📎 ' : '';
-        
         item.innerHTML = `
-            <span class="layer-name">${windIcon}${childIndicator}${layer.name}</span>
+            <span class="layer-name">${windIcon}${childIndicator}${parentIndicator}${typeIcon} ${layer.name}</span>
             <span class="layer-controls">
-                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '👀‍🗨️'}</button>
+                <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '🙈'}</button>
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
             </span>
         `;
+        item.insertBefore(checkbox, item.firstChild);
         
-        item.addEventListener('click', (e) => selectLayer(layer.id, e.shiftKey));
+        item.addEventListener('click', (e) => {
+            if (e.target.type !== 'checkbox') selectLayer(layer.id, e.shiftKey);
+        });
         layerList.appendChild(item);
         
-        // 子レイヤーを表示（画像レイヤーでも子を持てる、逆順）
+        // 子レイヤーを表示
         const children = layers.filter(l => l.parentLayerId === layer.id);
         for (let i = children.length - 1; i >= 0; i--) {
             renderLayerItem(children[i], depth + 1);
         }
     }
+}
+
+// ===== レイヤータイプアイコン取得 =====
+function getLayerTypeIcon(type) {
+    switch (type) {
+        case 'folder': return '📁';
+        case 'lipsync': return '💬';
+        case 'blink': return '👀';
+        case 'puppet': return '🎭';
+        case 'bounce': return '🎈';
+        case 'audio': return '🎵';
+        case 'image':
+        default: return '🖼️';
+    }
+}
+
+// ===== チェックボックスによる選択切り替え =====
+function toggleLayerSelection(layerId, checked) {
+    if (checked) {
+        if (!selectedLayerIds.includes(layerId)) {
+            selectedLayerIds.push(layerId);
+        }
+    } else {
+        const index = selectedLayerIds.indexOf(layerId);
+        if (index > -1) {
+            selectedLayerIds.splice(index, 1);
+        }
+    }
+    updateLayerList();
+    updatePropertiesPanel();
 }
 
 // ===== レイヤー選択（render()を呼ばない） =====
@@ -659,8 +887,19 @@ function handleDragOver(e, layerId) {
     
     // ドロップ位置の視覚的フィードバック
     const targetElement = e.currentTarget;
+    const targetLayer = layers.find(l => l.id === layerId);
+    
     if (draggedLayerId !== layerId) {
-        targetElement.style.borderTop = '2px solid var(--accent-gold)';
+        // ターゲットがフォルダの場合は特別なハイライト
+        if (targetLayer && targetLayer.type === 'folder') {
+            targetElement.style.borderTop = '';
+            targetElement.style.background = 'rgba(218, 165, 32, 0.3)';
+            targetElement.style.outline = '2px solid var(--accent-gold)';
+        } else {
+            targetElement.style.borderTop = '2px solid var(--accent-gold)';
+            targetElement.style.background = '';
+            targetElement.style.outline = '';
+        }
     }
     
     return false;
@@ -668,6 +907,8 @@ function handleDragOver(e, layerId) {
 
 function handleDragLeave(e) {
     e.currentTarget.style.borderTop = '';
+    e.currentTarget.style.background = '';
+    e.currentTarget.style.outline = '';
 }
 
 function handleDrop(e, targetLayerId) {
@@ -676,25 +917,68 @@ function handleDrop(e, targetLayerId) {
     }
     
     e.currentTarget.style.borderTop = '';
+    e.currentTarget.style.background = '';
+    e.currentTarget.style.outline = '';
     
     if (draggedLayerId === targetLayerId) return false;
     
-    // レイヤーの順序を入れ替える
     const draggedLayer = layers.find(l => l.id === draggedLayerId);
     const targetLayer = layers.find(l => l.id === targetLayerId);
     
     if (!draggedLayer || !targetLayer) return false;
     
-    // 配列から削除
-    const draggedIndex = layers.indexOf(draggedLayer);
-    layers.splice(draggedIndex, 1);
-    
-    // 新しい位置に挿入
-    const targetIndex = layers.indexOf(targetLayer);
-    layers.splice(targetIndex, 0, draggedLayer);
+    // ターゲットがフォルダの場合：フォルダ内に追加
+    if (targetLayer.type === 'folder') {
+        // 循環参照チェック（ドラッグしたレイヤーがフォルダの場合）
+        if (draggedLayer.type === 'folder') {
+            // ターゲットフォルダがドラッグしたフォルダの子孫でないかチェック
+            let checkParent = targetLayer;
+            while (checkParent) {
+                if (checkParent.parentLayerId === draggedLayerId) {
+                    alert('循環参照になるため、この操作はできません');
+                    return false;
+                }
+                checkParent = layers.find(l => l.id === checkParent.parentLayerId);
+            }
+        }
+        
+        // ドラッグしたレイヤーに親が設定されていない場合のみ親を設定
+        // （既に親がある場合は順序変更のみ）
+        if (!draggedLayer.parentLayerId) {
+            // フォルダからの相対座標に変換
+            const dx = draggedLayer.x - targetLayer.x;
+            const dy = draggedLayer.y - targetLayer.y;
+            draggedLayer.x = dx;
+            draggedLayer.y = dy;
+            
+            // 親をフォルダに設定
+            draggedLayer.parentLayerId = targetLayerId;
+            
+            console.log(`📁 レイヤー "${draggedLayer.name}" をフォルダ "${targetLayer.name}" に追加しました`);
+        }
+        
+        // 配列内の位置を調整（フォルダの直後に移動）
+        const draggedIndex = layers.indexOf(draggedLayer);
+        layers.splice(draggedIndex, 1);
+        
+        const targetIndex = layers.indexOf(targetLayer);
+        layers.splice(targetIndex + 1, 0, draggedLayer);
+    } else {
+        // 通常のレイヤー順序変更
+        const draggedIndex = layers.indexOf(draggedLayer);
+        layers.splice(draggedIndex, 1);
+        
+        const targetIndex = layers.indexOf(targetLayer);
+        layers.splice(targetIndex, 0, draggedLayer);
+    }
     
     updateLayerList();
     render();
+    
+    // 履歴を保存
+    if (typeof saveHistory === 'function') {
+        saveHistory();
+    }
     
     return false;
 }
@@ -702,10 +986,12 @@ function handleDrop(e, targetLayerId) {
 function handleDragEnd(e) {
     e.target.style.opacity = '1';
     
-    // すべてのボーダーをクリア
+    // すべてのスタイルをクリア
     const items = document.querySelectorAll('.layer-item');
     items.forEach(item => {
         item.style.borderTop = '';
+        item.style.background = '';
+        item.style.outline = '';
     });
     
     draggedLayerId = null;

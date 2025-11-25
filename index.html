@@ -28,6 +28,9 @@
     <!-- スタイルシート -->
     <link rel="stylesheet" href="styles.css">
     
+    <!-- JSZip（プロジェクト保存用） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
     <!-- iOS Safari スプラッシュスクリーン -->
     <meta name="apple-mobile-web-app-capable" content="yes">
 </head>
@@ -36,9 +39,17 @@
         <!-- ヘッダー -->
         <header class="header">
             <img src="logo.png" alt="Puppet Bear" class="header-logo">
-            <button id="export-btn" class="btn-export" onclick="showExportDialog()">
-                📤 書き出し
-            </button>
+            <div class="header-buttons">
+                <button id="save-project-btn" class="btn-project" onclick="saveProject()">
+                    💾 保存
+                </button>
+                <button id="load-project-btn" class="btn-project" onclick="loadProjectDialog()">
+                    📂 読込
+                </button>
+                <button id="export-btn" class="btn-export" onclick="showExportDialog()">
+                    📤 書き出し
+                </button>
+            </div>
         </header>
         
         <!-- メインコンテンツ -->
@@ -174,6 +185,7 @@
     <script src="app-clipping.js"></script>
     <script src="app-properties.js"></script>
     <script src="app-export.js"></script>
+    <script src="app-project.js"></script>
     <script src="app-touch.js"></script>
     <script src="app.js"></script>
 </body>
