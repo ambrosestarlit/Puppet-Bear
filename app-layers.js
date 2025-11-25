@@ -371,6 +371,26 @@ function createImageLayer(img, filename) {
 
 // ===== レイヤーアイテムを再帰的に描画（チェックボックス付き） =====
 function renderLayerItem(layer, depth) {
+    const isSelected = selectedLayerIds.includes(layer.id);
+    
+    // 選択中の場合、レイヤー名ラベルを上に表示
+    if (isSelected) {
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'layer-name-label';
+        nameLabel.style.cssText = `
+            padding: 4px 8px 6px ${depth * 20 + 8}px;
+            font-size: 11px;
+            color: var(--accent-gold);
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+        `;
+        nameLabel.textContent = `▽ ${layer.name}`;
+        layerList.appendChild(nameLabel);
+    }
+    
     const item = document.createElement('div');
     item.className = 'layer-item';
     item.style.paddingLeft = `${depth * 20 + 8}px`;
