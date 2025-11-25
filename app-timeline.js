@@ -69,10 +69,14 @@ function initTimeline() {
     
     // タイムラインマウスダウンイベント（シークバードラッグ用）
     timelineContent.addEventListener('mousedown', handleTimelineMouseDown);
+    timelineContent.addEventListener('touchstart', handleTimelineTouchStartInternal, { passive: false });
     
     // キーフレームドラッグイベント
     document.addEventListener('mousemove', handleKeyframeDrag);
     document.addEventListener('mouseup', handleKeyframeDragEnd);
+    document.addEventListener('touchmove', handleKeyframeTouchMove, { passive: false });
+    document.addEventListener('touchend', handleKeyframeTouchEnd);
+    document.addEventListener('touchcancel', handleKeyframeTouchEnd);
     
     // キーボードイベント（Deleteキー）
     document.addEventListener('keydown', handleKeyframeDelete);
@@ -405,6 +409,13 @@ function renderKeyframe(layer, kfIndex, y, property = null) {
     }
     
     keyframeEl.addEventListener('mousedown', (e) => handleKeyframeMouseDown(e, layer.id, kfIndex, property));
+    keyframeEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.touches.length === 1) {
+            handleKeyframeTouchStart(e.touches[0], layer.id, kfIndex, property);
+        }
+    }, { passive: false });
     keyframeEl.addEventListener('click', (e) => {
         e.stopPropagation();
         selectKeyframe(layer.id, kfIndex, property);
@@ -442,6 +453,13 @@ function renderBounceKeyframeOnTrack(layer, kfIndex, y, type) {
     keyframeEl.dataset.bounceType = type;
     
     keyframeEl.addEventListener('mousedown', (e) => handleBounceKeyframeMouseDown(e, layer.id, kfIndex, type));
+    keyframeEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.touches.length === 1) {
+            handleBounceKeyframeTouchStart(e.touches[0], layer.id, kfIndex, type);
+        }
+    }, { passive: false });
     keyframeEl.addEventListener('click', (e) => {
         e.stopPropagation();
         selectBounceKeyframe(layer.id, kfIndex, type);
@@ -485,6 +503,18 @@ function renderBounceKeyframe(layer, kfIndex, y) {
         }
         render();
     });
+    
+    keyframeEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // キーフレームの時間に移動
+        currentTime = kf.frame / projectFPS;
+        updatePlayhead();
+        if (typeof applyKeyframeInterpolation === 'function') {
+            applyKeyframeInterpolation();
+        }
+        render();
+    }, { passive: false });
     
     timelineContent.appendChild(keyframeEl);
 }
@@ -636,6 +666,135 @@ function handleKeyframeDrag(e) {
 
 // ===== キーフレームドラッグ終了 =====
 function handleKeyframeDragEnd(e) {
+    // シークバードラッグ終了
+    if (isSeekbarDragging) {
+        isSeekbarDragging = false;
+        return;
+    }
+    
+    // キーフレームドラッグ終了
+    if (isDraggingKeyframe) {
+        isDraggingKeyframe = false;
+        updateTimeline();
+        render();
+    }
+}
+
+// ===== タイムラインタッチスタート（内部用） =====
+function handleTimelineTouchStartInternal(e) {
+    if (e.touches.length !== 1) return;
+    
+    const touch = e.touches[0];
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // キーフレームをタッチした場合
+    if (target && target.classList.contains('keyframe')) {
+        e.preventDefault();
+        const layerId = parseInt(target.dataset.layerId);
+        const keyframeIndex = parseInt(target.dataset.keyframeIndex);
+        const property = target.dataset.property || null;
+        handleKeyframeTouchStart(touch, layerId, keyframeIndex, property);
+        return;
+    }
+    
+    e.preventDefault();
+    
+    const timeline = document.getElementById('timeline');
+    const rect = timeline.getBoundingClientRect();
+    const clickX = touch.clientX - rect.left + timeline.scrollLeft;
+    const clickY = touch.clientY - rect.top;
+    
+    // シークバー（くま）の範囲でタッチ（上部40pxの範囲）
+    const currentFrameVal = Math.floor(currentTime * projectFPS);
+    const playheadX = currentFrameVal * timelinePixelsPerFrame;
+    const hitArea = 35; // タッチ用に広げる
+    
+    if (clickY < 50 && Math.abs(clickX - playheadX) < hitArea) {
+        // シークバードラッグ開始
+        isSeekbarDragging = true;
+        updateSeekbarPositionTouch(touch);
+        return;
+    }
+    
+    // 通常のタイムラインタッチ（瞬時移動）
+    const clickedFrame = Math.floor(clickX / timelinePixelsPerFrame);
+    currentTime = clickedFrame / projectFPS;
+    
+    // キーフレーム補間を適用
+    applyKeyframeInterpolation();
+    
+    updatePlayhead();
+    render();
+}
+
+// ===== シークバー位置更新（タッチ用） =====
+function updateSeekbarPositionTouch(touch) {
+    const timeline = document.getElementById('timeline');
+    const rect = timeline.getBoundingClientRect();
+    const x = touch.clientX - rect.left + timeline.scrollLeft;
+    
+    // タッチ位置から直接currentTimeを計算
+    const newTime = Math.max(0, x / timelinePixelsPerFrame) / projectFPS;
+    pendingSeekbarTime = newTime;
+    
+    // requestAnimationFrameで描画をスケジュール
+    if (!seekbarRenderScheduled) {
+        seekbarRenderScheduled = true;
+        requestAnimationFrame(() => {
+            currentTime = pendingSeekbarTime;
+            applyKeyframeInterpolation();
+            updatePlayhead();
+            render();
+            seekbarRenderScheduled = false;
+        });
+    }
+}
+
+// ===== キーフレームタッチスタート =====
+function handleKeyframeTouchStart(touch, layerId, keyframeIndex, property = null) {
+    selectedKeyframe = { layerId, index: keyframeIndex, property };
+    isDraggingKeyframe = true;
+    
+    keyframeDragStart.x = touch.clientX;
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (layer && layer.keyframes && layer.keyframes[keyframeIndex]) {
+        keyframeDragStart.frame = layer.keyframes[keyframeIndex].frame;
+    }
+    
+    updateTimeline();
+}
+
+// ===== キーフレームタッチムーブ =====
+function handleKeyframeTouchMove(e) {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    
+    // シークバードラッグ中
+    if (isSeekbarDragging) {
+        e.preventDefault();
+        updateSeekbarPositionTouch(touch);
+        return;
+    }
+    
+    // キーフレームドラッグ中
+    if (!isDraggingKeyframe || !selectedKeyframe) return;
+    
+    e.preventDefault();
+    
+    const deltaX = touch.clientX - keyframeDragStart.x;
+    const deltaFrames = Math.round(deltaX / timelinePixelsPerFrame);
+    const newFrame = Math.max(0, keyframeDragStart.frame + deltaFrames);
+    
+    const layer = layers.find(l => l.id === selectedKeyframe.layerId);
+    if (layer && layer.keyframes && layer.keyframes[selectedKeyframe.index]) {
+        layer.keyframes[selectedKeyframe.index].frame = newFrame;
+        updateTimeline();
+    }
+}
+
+// ===== キーフレームタッチエンド =====
+function handleKeyframeTouchEnd(e) {
     // シークバードラッグ終了
     if (isSeekbarDragging) {
         isSeekbarDragging = false;
@@ -844,6 +1003,18 @@ function handleBounceKeyframeMouseDown(e, layerId, kfIndex, type) {
     }
 }
 
+// バウンスキーフレームタッチスタート
+function handleBounceKeyframeTouchStart(touch, layerId, kfIndex, type) {
+    isDraggingBounceKeyframe = true;
+    selectedBounceKeyframe = { layerId, index: kfIndex, type };
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (layer && layer.bounceParams && layer.bounceParams.keyframes[kfIndex]) {
+        bounceKeyframeDragStart.frame = layer.bounceParams.keyframes[kfIndex].frame;
+        bounceKeyframeDragStart.x = touch.clientX;
+    }
+}
+
 // キーフレームドラッグ処理を拡張
 document.addEventListener('mousemove', (e) => {
     if (isDraggingBounceKeyframe && selectedBounceKeyframe) {
@@ -859,12 +1030,45 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
+// バウンスキーフレームのタッチムーブ
+document.addEventListener('touchmove', (e) => {
+    if (isDraggingBounceKeyframe && selectedBounceKeyframe && e.touches.length === 1) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - bounceKeyframeDragStart.x;
+        const deltaFrame = Math.round(deltaX / timelinePixelsPerFrame);
+        const newFrame = Math.max(0, bounceKeyframeDragStart.frame + deltaFrame);
+        
+        const layer = layers.find(l => l.id === selectedBounceKeyframe.layerId);
+        if (layer && layer.bounceParams && layer.bounceParams.keyframes[selectedBounceKeyframe.index]) {
+            layer.bounceParams.keyframes[selectedBounceKeyframe.index].frame = newFrame;
+            updateTimeline();
+        }
+    }
+}, { passive: false });
+
 document.addEventListener('mouseup', () => {
     if (isDraggingBounceKeyframe) {
         isDraggingBounceKeyframe = false;
         if (typeof updatePropertiesPanel === 'function') {
             updatePropertiesPanel();
         }
+    }
+});
+
+// バウンスキーフレームのタッチエンド
+document.addEventListener('touchend', () => {
+    if (isDraggingBounceKeyframe) {
+        isDraggingBounceKeyframe = false;
+        if (typeof updatePropertiesPanel === 'function') {
+            updatePropertiesPanel();
+        }
+    }
+});
+
+document.addEventListener('touchcancel', () => {
+    if (isDraggingBounceKeyframe) {
+        isDraggingBounceKeyframe = false;
     }
 });
 
@@ -917,6 +1121,14 @@ function renderPuppetPinKeyframe(layer, pinIndex, kfIndex, y) {
         handlePuppetKeyframeMouseDown(e, layer.id, pinIndex, kfIndex);
     });
     
+    kfElement.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.touches.length === 1) {
+            handlePuppetKeyframeTouchStart(e.touches[0], layer.id, pinIndex, kfIndex);
+        }
+    }, { passive: false });
+    
     timelineContent.appendChild(kfElement);
 }
 
@@ -929,6 +1141,20 @@ function handlePuppetKeyframeMouseDown(e, layerId, pinIndex, kfIndex) {
     if (layer && layer.puppetPins && layer.puppetPins[pinIndex] && layer.puppetPins[pinIndex].keyframes[kfIndex]) {
         puppetKeyframeDragStart.frame = layer.puppetPins[pinIndex].keyframes[kfIndex].frame;
         puppetKeyframeDragStart.x = e.clientX;
+    }
+    
+    updateTimeline();
+}
+
+// パペットキーフレームタッチスタート
+function handlePuppetKeyframeTouchStart(touch, layerId, pinIndex, kfIndex) {
+    isDraggingPuppetKeyframe = true;
+    selectedPuppetKeyframe = { layerId, pinIndex, kfIndex };
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (layer && layer.puppetPins && layer.puppetPins[pinIndex] && layer.puppetPins[pinIndex].keyframes[kfIndex]) {
+        puppetKeyframeDragStart.frame = layer.puppetPins[pinIndex].keyframes[kfIndex].frame;
+        puppetKeyframeDragStart.x = touch.clientX;
     }
     
     updateTimeline();
@@ -953,12 +1179,49 @@ document.addEventListener('mousemove', (e) => {
     }
 });
 
+// パペットキーフレームタッチムーブ
+document.addEventListener('touchmove', (e) => {
+    if (isDraggingPuppetKeyframe && selectedPuppetKeyframe && e.touches.length === 1) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - puppetKeyframeDragStart.x;
+        const deltaFrame = Math.round(deltaX / timelinePixelsPerFrame);
+        const newFrame = Math.max(0, puppetKeyframeDragStart.frame + deltaFrame);
+        
+        const layer = layers.find(l => l.id === selectedPuppetKeyframe.layerId);
+        if (layer && layer.puppetPins && layer.puppetPins[selectedPuppetKeyframe.pinIndex]) {
+            const pin = layer.puppetPins[selectedPuppetKeyframe.pinIndex];
+            if (pin.keyframes[selectedPuppetKeyframe.kfIndex]) {
+                pin.keyframes[selectedPuppetKeyframe.kfIndex].frame = newFrame;
+                pin.keyframes.sort((a, b) => a.frame - b.frame);
+                updateTimeline();
+            }
+        }
+    }
+}, { passive: false });
+
 document.addEventListener('mouseup', () => {
     if (isDraggingPuppetKeyframe) {
         isDraggingPuppetKeyframe = false;
         if (typeof updatePropertiesPanel === 'function') {
             updatePropertiesPanel();
         }
+    }
+});
+
+// パペットキーフレームタッチエンド
+document.addEventListener('touchend', () => {
+    if (isDraggingPuppetKeyframe) {
+        isDraggingPuppetKeyframe = false;
+        if (typeof updatePropertiesPanel === 'function') {
+            updatePropertiesPanel();
+        }
+    }
+});
+
+document.addEventListener('touchcancel', () => {
+    if (isDraggingPuppetKeyframe) {
+        isDraggingPuppetKeyframe = false;
     }
 });
 
