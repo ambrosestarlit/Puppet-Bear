@@ -443,7 +443,7 @@ function createColorClippingMask(layer) {
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = canvas.width;
     maskCanvas.height = canvas.height;
-    const maskCtx = maskCanvas.getContext('2d');
+    const maskCtx = maskCanvas.getContext('2d', { alpha: true });
     
     maskCtx.save();
     

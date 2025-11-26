@@ -67,9 +67,9 @@ let blinkKeyframes = {}; // layerId: [キーフレーム配列]
 
 // ===== 初期化 =====
 window.addEventListener('DOMContentLoaded', () => {
-    // キャンバス初期化
+    // キャンバス初期化（透過対応）
     canvas = document.getElementById('canvas');
-    ctx = canvas.getContext('2d');
+    ctx = canvas.getContext('2d', { alpha: true });
     canvas.width = 1920;
     canvas.height = 1080;
     

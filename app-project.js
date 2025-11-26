@@ -255,7 +255,7 @@ function imageToBase64(img) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = img.width;
         tempCanvas.height = img.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { alpha: true });
         tempCtx.drawImage(img, 0, 0);
         resolve(tempCanvas.toDataURL('image/png'));
     });

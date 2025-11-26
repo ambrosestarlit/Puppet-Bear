@@ -25,7 +25,7 @@ function getImageDataUrl(img) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = img.naturalWidth || img.width;
         tempCanvas.height = img.naturalHeight || img.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { alpha: true });
         tempCtx.drawImage(img, 0, 0);
         const dataUrl = tempCanvas.toDataURL('image/png');
         

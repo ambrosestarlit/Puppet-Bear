@@ -578,11 +578,11 @@ async function exportPngSequence(width, height, transparent, exportFPS) {
     
     updateExportProgress(0, '連番PNG生成中...');
     
-    // 一時キャンバスを作成
+    // 一時キャンバスを作成（透過対応）
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = width;
     tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d', { alpha: true });
     
     // JSZipを動的にロード
     if (typeof JSZip === 'undefined') {
@@ -685,11 +685,11 @@ async function exportWebM(width, height, includeAudio, transparent, bitrate, exp
     
     updateExportProgress(0, 'WebM生成準備中...');
     
-    // 一時キャンバスを作成
+    // 一時キャンバスを作成（透過対応）
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = width;
     tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d', { alpha: true });
     
     // MediaRecorderのサポートを確認（柔軟に検出）
     const mimeType = getSupportedMimeType(transparent);
@@ -826,10 +826,7 @@ function renderFrameToCanvas(tempCanvas, tempCtx, transparent) {
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
     }
     
-    // メインキャンバスの内容をコピー
-    render(); // メインキャンバスを更新
-    
-    // スケーリングしてコピー
+    // スケーリング計算
     const scaleX = tempCanvas.width / canvas.width;
     const scaleY = tempCanvas.height / canvas.height;
     const scale = Math.min(scaleX, scaleY);
@@ -840,17 +837,29 @@ function renderFrameToCanvas(tempCanvas, tempCtx, transparent) {
     const offsetY = (tempCanvas.height - drawHeight) / 2;
     
     if (transparent) {
-        // 透過の場合、背景なしでキャンバスをコピー
-        // メインキャンバスを一時的に透過で再レンダリング
-        const originalFillStyle = ctx.fillStyle;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // 背景を描画せずにレイヤーのみ描画
-        renderLayersOnly();
+        // 透過の場合、背景なしでレンダリング
+        // グローバルフラグを設定
+        window.isTransparentExport = true;
+        window.isExporting = true;
+        
+        // メインキャンバスを透過モードでレンダリング
+        render();
+        
+        // 結果をコピー
         tempCtx.drawImage(canvas, offsetX, offsetY, drawWidth, drawHeight);
-        // 元に戻す
+        
+        // フラグをリセット
+        window.isTransparentExport = false;
+        window.isExporting = false;
+        
+        // 元に戻す（プレビュー用）
         render();
     } else {
+        // 通常の場合
+        window.isExporting = true;
+        render();
         tempCtx.drawImage(canvas, offsetX, offsetY, drawWidth, drawHeight);
+        window.isExporting = false;
     }
 }
 

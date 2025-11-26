@@ -104,8 +104,12 @@ function loadSequenceImages(files, callback) {
 function render() {
     // キャンバスクリア
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#2a2a2a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 透過書き出し中でなければ背景を描画
+    if (typeof isTransparentExport === 'undefined' || !isTransparentExport) {
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     
     // 現在の時間を取得（アニメーション用）
     const localTime = currentTime;
@@ -215,7 +219,7 @@ function render() {
             tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
-            tempCtx = tempCanvas.getContext('2d');
+            tempCtx = tempCanvas.getContext('2d', { alpha: true });
             tempCtx.save();
         } else {
             ctx.save();
