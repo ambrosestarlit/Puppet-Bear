@@ -598,21 +598,35 @@ function drawSequenceLayer(layer, localTime) {
     
     // 現在の画像を取得
     let currentImg = layer.sequenceImages[0];
-    let width = layer.sequenceImages[0].width;
-    let height = layer.sequenceImages[0].height;
+    if (!currentImg) {
+        ctx.restore();
+        return;
+    }
+    let width = currentImg.width;
+    let height = currentImg.height;
     
     // 常にループ再生（コマ落とし対応）
     const fps = layer.fps || 12;
     const frameSkip = layer.frameSkip || 0; // 何フレームスキップするか
     const skipInterval = frameSkip + 1; // 実際の間隔（例: frameSkip=2なら3フレームごと）
     
-    // 時間からフレーム番号を計算
-    const totalFrameTime = localTime * fps; // FPSベースでのフレーム経過
-    const effectiveFrameIndex = Math.floor(totalFrameTime / skipInterval); // コマ落とし後のフレーム番号
+    // 時間からフレーム番号を計算（FPSベース）
+    const frameIndex = Math.floor(localTime * fps);
     
-    // 連番画像の数でループ
-    const seqIndex = effectiveFrameIndex % layer.sequenceImages.length;
-    currentImg = layer.sequenceImages[seqIndex];
+    // コマ落とし: フレームインデックスにスキップ間隔を掛けて画像インデックスを決定
+    // 例: frameSkip=2, 連番7枚の場合
+    // frameIndex=0 → 0*3=0 → 画像0
+    // frameIndex=1 → 1*3=3 → 画像3
+    // frameIndex=2 → 2*3=6 → 画像6
+    // frameIndex=3 → 3*3=9 → 9%7=2 → 画像2
+    // これにより、同じ時間でより多くの連番を飛ばすので早く見える
+    const imageIndex = (frameIndex * skipInterval) % layer.sequenceImages.length;
+    const selectedImg = layer.sequenceImages[imageIndex];
+    if (selectedImg) {
+        currentImg = selectedImg;
+        width = currentImg.width;
+        height = currentImg.height;
+    }
     
     // アンカーポイント計算
     const anchorX = layer.anchorX !== undefined ? layer.anchorX : 0.5;
@@ -629,14 +643,16 @@ function drawSequenceLayer(layer, localTime) {
     // スケール（アンカーポイントを中心に）
     ctx.scale(layer.scale, layer.scale);
     
-    // 画像を描画
-    ctx.drawImage(
-        currentImg,
-        -anchorOffsetX,
-        -anchorOffsetY,
-        width,
-        height
-    );
+    // 画像を描画（有効な画像のみ）
+    if (currentImg && currentImg.complete && currentImg.naturalWidth > 0) {
+        ctx.drawImage(
+            currentImg,
+            -anchorOffsetX,
+            -anchorOffsetY,
+            width,
+            height
+        );
+    }
     
     // アンカーポイント表示 - 書き出し中は描画しない
     if (typeof isExporting === 'undefined' || !isExporting) {
