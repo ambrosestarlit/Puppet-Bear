@@ -415,14 +415,10 @@ function applyCanvasZoom() {
     }
 }
 
-// マウスホイールでズーム
+// マウスホイールでズーム - 無効化（レイヤー操作と競合するため）
+// プレビューのズームはボタン（➕➖）で行う
 function handleCanvasWheel(e) {
-    // Ctrlキーが押されている場合のみズーム
-    if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        zoomCanvas(delta);
-    }
+    // 何もしない - ホイールはレイヤー操作に使用
 }
 
 // パン開始（中ボタンまたはスペース+ドラッグ）
@@ -486,35 +482,15 @@ function setupCanvasZoomEvents() {
         }
     });
     
-    // ピンチズーム（タッチデバイス）
-    let initialPinchDistance = 0;
-    let initialZoom = 1;
+    // ピンチズーム - 無効化（レイヤー操作と競合するため）
+    // プレビューのズームはボタン（➕➖）で行う
+    // let initialPinchDistance = 0;
+    // let initialZoom = 1;
     
-    canvasArea.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
-            initialZoom = canvasZoom;
-        }
-    }, { passive: true });
+    // canvasArea.addEventListener('touchstart', ...) - 削除
+    // canvasArea.addEventListener('touchmove', ...) - 削除
     
-    canvasArea.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const currentDistance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (initialPinchDistance > 0) {
-                const scale = currentDistance / initialPinchDistance;
-                canvasZoom = Math.max(0.1, Math.min(5.0, initialZoom * scale));
-                canvasZoom = Math.round(canvasZoom * 10) / 10;
-                applyCanvasZoom();
-            }
-        }
-    }, { passive: true });
-    
-    console.log('🔍 キャンバスズーム機能を初期化しました');
+    console.log('🔍 キャンバスズーム機能を初期化しました（ボタン操作のみ）');
 }
 
 // 初期化時に呼び出し
