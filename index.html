@@ -90,6 +90,15 @@
                         <input type="checkbox" id="show-pins-checkbox" checked>
                         <span>📍 ピン表示</span>
                     </label>
+                    <div class="toolbar-separator"></div>
+                    <!-- キャンバスズームコントロール -->
+                    <div class="toolbar-group canvas-zoom-control">
+                        <button onclick="zoomCanvas(-0.1)" class="toolbar-btn toolbar-btn-small" title="縮小">➖</button>
+                        <span id="canvas-zoom-value" class="canvas-zoom-value">100%</span>
+                        <button onclick="zoomCanvas(0.1)" class="toolbar-btn toolbar-btn-small" title="拡大">➕</button>
+                        <button onclick="resetCanvasZoom()" class="toolbar-btn toolbar-btn-small" title="リセット">↺</button>
+                        <button onclick="fitCanvasToView()" class="toolbar-btn toolbar-btn-small" title="画面にフィット">⬜</button>
+                    </div>
                 </div>
                 
                 <!-- キャンバス -->

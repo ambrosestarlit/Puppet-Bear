@@ -357,3 +357,169 @@ function updatePropertyValues(layer) {
     if (opacitySlider) opacitySlider.value = layer.opacity;
     if (opacityNumber) opacityNumber.value = (layer.opacity * 100).toFixed(0);
 }
+
+// ===== キャンバスズーム機能 =====
+let canvasZoom = 1.0;
+let canvasPanX = 0;
+let canvasPanY = 0;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+
+// ズーム変更
+function zoomCanvas(delta) {
+    const newZoom = Math.max(0.1, Math.min(5.0, canvasZoom + delta));
+    canvasZoom = Math.round(newZoom * 10) / 10; // 0.1刻み
+    applyCanvasZoom();
+}
+
+// ズームをリセット
+function resetCanvasZoom() {
+    canvasZoom = 1.0;
+    canvasPanX = 0;
+    canvasPanY = 0;
+    applyCanvasZoom();
+}
+
+// 画面にフィット
+function fitCanvasToView() {
+    const container = document.getElementById('canvasContainer');
+    const canvasArea = document.querySelector('.canvas-area');
+    if (!container || !canvasArea || !canvas) return;
+    
+    const areaWidth = canvasArea.clientWidth - 20;
+    const areaHeight = canvasArea.clientHeight - 20;
+    
+    const scaleX = areaWidth / canvas.width;
+    const scaleY = areaHeight / canvas.height;
+    
+    canvasZoom = Math.min(scaleX, scaleY, 1.0);
+    canvasZoom = Math.round(canvasZoom * 10) / 10;
+    canvasPanX = 0;
+    canvasPanY = 0;
+    applyCanvasZoom();
+}
+
+// ズームを適用
+function applyCanvasZoom() {
+    const container = document.getElementById('canvasContainer');
+    if (!container) return;
+    
+    container.style.transform = `translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasZoom})`;
+    container.style.transformOrigin = 'center center';
+    
+    // ズーム値を表示
+    const zoomValue = document.getElementById('canvas-zoom-value');
+    if (zoomValue) {
+        zoomValue.textContent = Math.round(canvasZoom * 100) + '%';
+    }
+}
+
+// マウスホイールでズーム
+function handleCanvasWheel(e) {
+    // Ctrlキーが押されている場合のみズーム
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        zoomCanvas(delta);
+    }
+}
+
+// パン開始（中ボタンまたはスペース+ドラッグ）
+function startCanvasPan(e) {
+    // 中ボタン、またはスペースキーが押されている場合
+    if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
+        e.preventDefault();
+        isPanning = true;
+        panStartX = e.clientX - canvasPanX;
+        panStartY = e.clientY - canvasPanY;
+        document.body.style.cursor = 'grabbing';
+    }
+}
+
+// パン中
+function updateCanvasPan(e) {
+    if (!isPanning) return;
+    canvasPanX = e.clientX - panStartX;
+    canvasPanY = e.clientY - panStartY;
+    applyCanvasZoom();
+}
+
+// パン終了
+function endCanvasPan() {
+    if (isPanning) {
+        isPanning = false;
+        document.body.style.cursor = '';
+    }
+}
+
+// スペースキー状態
+let isSpacePressed = false;
+
+// キャンバスズームのイベントリスナー設定
+function setupCanvasZoomEvents() {
+    const canvasArea = document.querySelector('.canvas-area');
+    if (!canvasArea) return;
+    
+    // マウスホイール
+    canvasArea.addEventListener('wheel', handleCanvasWheel, { passive: false });
+    
+    // パン操作
+    canvasArea.addEventListener('mousedown', startCanvasPan);
+    document.addEventListener('mousemove', updateCanvasPan);
+    document.addEventListener('mouseup', endCanvasPan);
+    
+    // スペースキー
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+            isSpacePressed = true;
+            const canvasArea = document.querySelector('.canvas-area');
+            if (canvasArea) canvasArea.style.cursor = 'grab';
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            isSpacePressed = false;
+            const canvasArea = document.querySelector('.canvas-area');
+            if (canvasArea) canvasArea.style.cursor = '';
+        }
+    });
+    
+    // ピンチズーム（タッチデバイス）
+    let initialPinchDistance = 0;
+    let initialZoom = 1;
+    
+    canvasArea.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
+            initialZoom = canvasZoom;
+        }
+    }, { passive: true });
+    
+    canvasArea.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const currentDistance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (initialPinchDistance > 0) {
+                const scale = currentDistance / initialPinchDistance;
+                canvasZoom = Math.max(0.1, Math.min(5.0, initialZoom * scale));
+                canvasZoom = Math.round(canvasZoom * 10) / 10;
+                applyCanvasZoom();
+            }
+        }
+    }, { passive: true });
+    
+    console.log('🔍 キャンバスズーム機能を初期化しました');
+}
+
+// 初期化時に呼び出し
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupCanvasZoomEvents);
+} else {
+    setupCanvasZoomEvents();
+}

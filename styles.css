@@ -271,6 +271,21 @@ body {
     border: none;
 }
 
+/* キャンバスズームコントロール */
+.canvas-zoom-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.canvas-zoom-value {
+    font-size: 11px;
+    color: var(--biscuit-light);
+    min-width: 40px;
+    text-align: center;
+    font-weight: bold;
+}
+
 .header-controls {
     display: flex;
     gap: 0.8rem;
@@ -331,6 +346,8 @@ body {
     background-color: var(--bg-dark);
     padding: 1rem;
     min-height: 400px;
+    overflow: hidden;
+    position: relative;
 }
 
 #canvas {
@@ -640,6 +657,8 @@ body {
     height: 100%;
     overflow: visible;
     z-index: 1;
+    transition: transform 0.1s ease-out;
+    will-change: transform;
 }
 
 /* ===== ピン表示 ===== */
