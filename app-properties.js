@@ -479,6 +479,8 @@ function updatePropertiesPanel() {
             ${generateWindSwayUI(layer)}
             
             ${generateWalkingUI(layer)}
+            
+            ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
         `;
         
         updateToolButtons();
@@ -506,6 +508,8 @@ function updatePropertiesPanel() {
         ${generateColorClippingUI(layer)}
         
         ${generateWindSwayUI(layer)}
+        
+        ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
     `;
     
     // ツールボタンのスタイルを更新
@@ -713,7 +717,100 @@ function updatePropertiesPanel() {
             ${generateParentUI(layer)}
             
             ${generateColorClippingUI(layer)}
+            
+            ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
         `;
+        
+        // 色抜きクリッピングの参照レイヤーセレクトを更新
+        if (typeof updateColorClippingReferenceSelect === 'function') {
+            updateColorClippingReferenceSelect(layer);
+        }
+        
+        clearPinElements();
+        return;
+    }
+    
+    // 断面図レイヤーの場合
+    if (layer.type === 'crosssection') {
+        // frameSkipの初期化
+        if (layer.frameSkip === undefined) {
+            layer.frameSkip = 0;
+        }
+        
+        // プリセットオプションを生成（非同期で読み込み後に更新）
+        const generatePresetOptions = async () => {
+            const presets = await loadCrossSectionManifest();
+            const select = document.getElementById('crosssection-preset-select');
+            if (select) {
+                select.innerHTML = presets.map(p => 
+                    `<option value="${p.id}" ${p.id === layer.presetId ? 'selected' : ''}>${p.name}</option>`
+                ).join('');
+            }
+        };
+        
+        propertiesPanel.innerHTML = `
+            <h3>🔞 ${layer.name}</h3>
+            
+            ${generateTransformUI(layer)}
+            
+            ${generateBlendModeUI(layer)}
+            
+            <div class="property-group">
+                <h4>🔞 断面図制御</h4>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; display: block; margin-bottom: 4px;">アニメーションタイプ</label>
+                    <select id="crosssection-preset-select" 
+                        style="width: 100%; padding: 8px; background: var(--biscuit-dark); color: var(--chocolate-dark); border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px;"
+                        onchange="changeCrossSectionPreset(${layer.id}, this.value)">
+                        <option value="">読み込み中...</option>
+                    </select>
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; display: block; margin-bottom: 4px;">
+                        連番画像: ${layer.sequenceImages ? layer.sequenceImages.length : 0}枚
+                    </label>
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; display: block; margin-bottom: 4px;">
+                        FPS: <span id="crosssectionFpsValue">${layer.fps || 12}</span>
+                    </label>
+                    <input type="range" class="property-slider" value="${layer.fps || 12}" 
+                        min="1" max="60" step="1"
+                        oninput="document.getElementById('crosssectionFpsValue').textContent = this.value; updateLayerProperty('fps', parseInt(this.value))">
+                </div>
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; display: block; margin-bottom: 4px;">
+                        コマ落とし: <span id="crosssectionFrameSkipValue">${layer.frameSkip || 0}</span> フレーム
+                    </label>
+                    <input type="range" class="property-slider" value="${layer.frameSkip || 0}" 
+                        min="0" max="10" step="1"
+                        oninput="document.getElementById('crosssectionFrameSkipValue').textContent = this.value; updateLayerProperty('frameSkip', parseInt(this.value))">
+                    <div style="font-size: 10px; color: var(--biscuit); margin-top: 4px;">
+                        0=通常再生 / 値を上げるほど早くなる
+                    </div>
+                </div>
+                
+                <div style="background: rgba(233, 30, 99, 0.2); padding: 8px; border-radius: 4px; font-size: 10px; line-height: 1.4; color: var(--biscuit-light);">
+                    💡 プリセットから断面図アニメーションを選択<br>
+                    📌 FPSとコマ落としで速度を調整
+                </div>
+            </div>
+            
+            ${generatePuppetFollowUI(layer)}
+            
+            ${generateParentUI(layer)}
+            
+            ${generateColorClippingUI(layer)}
+            
+            ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
+        `;
+        
+        // プリセットオプションを非同期で読み込み
+        generatePresetOptions();
         
         // 色抜きクリッピングの参照レイヤーセレクトを更新
         if (typeof updateColorClippingReferenceSelect === 'function') {
@@ -883,6 +980,8 @@ function updatePropertiesPanel() {
             ${generatePuppetFollowUI(layer)}
             
             ${generateParentUI(layer)}
+            
+            ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
         `;
         
         // キーフレームリストを更新
@@ -991,6 +1090,8 @@ function updatePropertiesPanel() {
             </div>
             
             ${generateParentUI(layer)}
+            
+            ${typeof generateWiggleUI === 'function' ? generateWiggleUI(layer) : ''}
         `;
         
         // 中間ピンリストを更新

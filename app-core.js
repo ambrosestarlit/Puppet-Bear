@@ -154,6 +154,12 @@ function render() {
             return;
         }
         
+        // 断面図レイヤーは連番アニメと同じ描画処理
+        if (layer.type === 'crosssection') {
+            drawSequenceLayer(layer, localTime);
+            return;
+        }
+        
         // 揺れモーションレイヤーは専用描画
         if (layer.type === 'bounce') {
             drawBounceLayer(layer, localTime);
@@ -259,7 +265,9 @@ function render() {
         // レイヤーの位置に移動（追従中は相対オフセットとして適用しない、または小さな値のみ）
         // 追従設定時は、画像をハンドル位置を中心に配置する
         if (!isFollowingPuppet) {
-            targetCtx.translate(layer.x, layer.y);
+            // Wiggleオフセットを適用
+            const wiggleOffset = typeof getWiggleOffset === 'function' ? getWiggleOffset(layer, localTime) : { x: 0, y: 0 };
+            targetCtx.translate(layer.x + wiggleOffset.x, layer.y + wiggleOffset.y);
         }
         // 追従中でもオフセットが必要な場合はここで適用（現在は無視）
         
@@ -634,8 +642,9 @@ function drawSequenceLayer(layer, localTime) {
     const anchorOffsetX = width * anchorX;
     const anchorOffsetY = height * anchorY;
     
-    // 位置
-    ctx.translate(layer.x, layer.y);
+    // 位置（Wiggleオフセットを適用）
+    const wiggleOffset = typeof getWiggleOffset === 'function' ? getWiggleOffset(layer, localTime) : { x: 0, y: 0 };
+    ctx.translate(layer.x + wiggleOffset.x, layer.y + wiggleOffset.y);
     
     // 回転（アンカーポイントを中心に）
     ctx.rotate(layer.rotation * Math.PI / 180);
@@ -731,11 +740,11 @@ function applyParentTransform(layer) {
         return;
     }
     
-    // 画像レイヤー、口パク、まばたき、連番アニメ、バウンスレイヤーの場合
+    // 画像レイヤー、口パク、まばたき、連番アニメ、断面図、バウンスレイヤーの場合
     let parentWidth, parentHeight;
     
-    if (parent.type === 'lipsync' || parent.type === 'blink' || parent.type === 'sequence') {
-        // 口パク・まばたき・連番アニメレイヤーの場合は最初の画像のサイズを使用
+    if (parent.type === 'lipsync' || parent.type === 'blink' || parent.type === 'sequence' || parent.type === 'crosssection') {
+        // 口パク・まばたき・連番アニメ・断面図レイヤーの場合は最初の画像のサイズを使用
         if (parent.sequenceImages && parent.sequenceImages.length > 0) {
             parentWidth = parent.sequenceImages[0].width;
             parentHeight = parent.sequenceImages[0].height;

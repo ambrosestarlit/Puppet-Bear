@@ -1,0 +1,20 @@
+{
+    "presets": [
+        {
+            "id": "tin_okumade",
+            "name": "男根を奥までしっかり",
+            "folder": "tin_okumade",
+            "prefix": "frame_",
+            "digits": 3,
+            "extension": ".png"
+        },
+        {
+            "id": "tin_kokizami",
+            "name": "男根を小刻みに",
+            "folder": "tin_kokizami",
+            "prefix": "frame_",
+            "digits": 3,
+            "extension": ".png"
+        }
+    ]
+}

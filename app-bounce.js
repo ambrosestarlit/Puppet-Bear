@@ -482,8 +482,9 @@ function drawBounceLayer(layer, localTime) {
         ctx.globalAlpha = layer.opacity;
         ctx.globalCompositeOperation = layer.blendMode;
         
-        // レイヤーの位置に移動
-        ctx.translate(transform.x, transform.y);
+        // レイヤーの位置に移動（Wiggleオフセットを適用）
+        const wiggleOffset = typeof getWiggleOffset === 'function' ? getWiggleOffset(layer, localTime) : { x: 0, y: 0 };
+        ctx.translate(transform.x + wiggleOffset.x, transform.y + wiggleOffset.y);
         
         // アンカーポイントのオフセット（画像左上からアンカーまでの距離）
         const anchorOffsetX = layer.anchorX * layer.width;
@@ -628,8 +629,9 @@ function drawBounceLayer(layer, localTime) {
     ctx.globalAlpha = layer.opacity;
     ctx.globalCompositeOperation = layer.blendMode;
     
-    // 現在のレイヤー位置を使用（親の変換を含む）
-    ctx.translate(transform.x, transform.y);
+    // 現在のレイヤー位置を使用（親の変換を含む + Wiggleオフセット）
+    const wiggleOffset = typeof getWiggleOffset === 'function' ? getWiggleOffset(layer, localTime) : { x: 0, y: 0 };
+    ctx.translate(transform.x + wiggleOffset.x, transform.y + wiggleOffset.y);
     
     // アンカーポイントを原点に移動
     ctx.translate(anchorOffsetX - layer.width / 2, anchorOffsetY - layer.height / 2);

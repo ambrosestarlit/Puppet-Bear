@@ -376,10 +376,53 @@ body {
     border: 2px solid var(--border-color);
     cursor: pointer;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     transition: background 0.2s ease, border-color 0.2s ease;
-    gap: 8px;
+    gap: 6px;
+}
+
+/* 2行レイアウト - 上段（レイヤー名） */
+.layer-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+/* 2行レイアウト - 下段（ボタン） */
+.layer-row-bottom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-left: 4px;
+}
+
+.layer-row-bottom button {
+    padding: 4px 8px;
+    background: var(--biscuit-dark);
+    color: var(--chocolate-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.layer-row-bottom button:hover {
+    background: var(--accent-gold);
+}
+
+/* タッチデバイス向けボタンサイズ */
+@media (pointer: coarse) {
+    .layer-row-bottom button {
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 16px;
+    }
 }
 
 .layer-item:hover {

@@ -86,6 +86,13 @@ function updateLayerList() {
     sequenceBtn.onclick = createSequenceLayer;
     buttonContainer.appendChild(sequenceBtn);
     
+    // 断面図レイヤー追加ボタン
+    const crossSectionBtn = document.createElement('button');
+    crossSectionBtn.textContent = '🔞 断面図追加';
+    crossSectionBtn.style.cssText = 'width: 100%; padding: 8px; background: linear-gradient(135deg, #e91e63, #c2185b); color: white; border: 2px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; display: block !important; visibility: visible !important;';
+    crossSectionBtn.onclick = createCrossSectionLayer;
+    buttonContainer.appendChild(crossSectionBtn);
+    
     // 揺れモーションレイヤー追加ボタン
     const bounceBtn = document.createElement('button');
     bounceBtn.textContent = '🎈 揺れモーション追加';
@@ -456,17 +463,20 @@ function renderLayerItem(layer, depth) {
     // フォルダの場合
     if (layer.type === 'folder') {
         const expanded = layer.expanded !== false;
+        const isChecked = selectedLayerIds.includes(layer.id) ? 'checked' : '';
         
         item.innerHTML = `
-            <span class="folder-toggle" onclick="toggleFolder(${layer.id}, event)">${expanded ? '▼' : '▶'}</span>
-            <span class="layer-name">${windIcon}${walkIcon}${parentIndicator}${typeIcon} ${layer.name}</span>
-            <span class="layer-controls">
+            <div class="layer-row-top">
+                <input type="checkbox" class="layer-checkbox" ${isChecked} onclick="event.stopPropagation(); toggleLayerSelection(${layer.id}, this.checked)">
+                <span class="folder-toggle" onclick="toggleFolder(${layer.id}, event)">${expanded ? '▼' : '▶'}</span>
+                <span class="layer-name">${windIcon}${walkIcon}${parentIndicator}${typeIcon} ${layer.name}</span>
+            </div>
+            <div class="layer-row-bottom">
                 <button class="layer-move-btn" onclick="moveLayerUp(${layer.id}, event)" title="上に移動">⬆</button>
                 <button class="layer-move-btn" onclick="moveLayerDown(${layer.id}, event)" title="下に移動">⬇</button>
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
+            </div>
         `;
-        item.insertBefore(checkbox, item.firstChild);
         
         item.addEventListener('click', (e) => {
             if (!e.target.classList.contains('folder-toggle') && e.target.type !== 'checkbox') {
@@ -486,17 +496,20 @@ function renderLayerItem(layer, depth) {
     // 音声レイヤーの場合
     else if (layer.type === 'audio') {
         const clipCount = layer.audioClips ? layer.audioClips.length : 0;
+        const isChecked = selectedLayerIds.includes(layer.id) ? 'checked' : '';
         
         item.innerHTML = `
-            <span class="layer-name">${typeIcon} ${layer.name} <span style="font-size: 10px; color: #1db954;">(${clipCount}クリップ)</span></span>
-            <span class="layer-controls">
+            <div class="layer-row-top">
+                <input type="checkbox" class="layer-checkbox" ${isChecked} onclick="event.stopPropagation(); toggleLayerSelection(${layer.id}, this.checked)">
+                <span class="layer-name">${typeIcon} ${layer.name} <span style="font-size: 10px; color: #1db954;">(${clipCount}クリップ)</span></span>
+            </div>
+            <div class="layer-row-bottom">
                 <button class="layer-move-btn" onclick="moveLayerUp(${layer.id}, event)" title="上に移動">⬆</button>
                 <button class="layer-move-btn" onclick="moveLayerDown(${layer.id}, event)" title="下に移動">⬇</button>
                 <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '🙈'}</button>
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
+            </div>
         `;
-        item.insertBefore(checkbox, item.firstChild);
         
         item.style.background = 'linear-gradient(135deg, #1a3d1a, #2d5a2d)';
         item.style.borderColor = '#1db954';
@@ -508,16 +521,20 @@ function renderLayerItem(layer, depth) {
     }
     // その他のレイヤー（画像、口パク、まばたき、パペット、バウンス）
     else {
+        const isChecked = selectedLayerIds.includes(layer.id) ? 'checked' : '';
+        
         item.innerHTML = `
-            <span class="layer-name">${windIcon}${childIndicator}${parentIndicator}${typeIcon} ${layer.name}</span>
-            <span class="layer-controls">
+            <div class="layer-row-top">
+                <input type="checkbox" class="layer-checkbox" ${isChecked} onclick="event.stopPropagation(); toggleLayerSelection(${layer.id}, this.checked)">
+                <span class="layer-name">${windIcon}${childIndicator}${parentIndicator}${typeIcon} ${layer.name}</span>
+            </div>
+            <div class="layer-row-bottom">
                 <button class="layer-move-btn" onclick="moveLayerUp(${layer.id}, event)" title="上に移動">⬆</button>
                 <button class="layer-move-btn" onclick="moveLayerDown(${layer.id}, event)" title="下に移動">⬇</button>
                 <button onclick="toggleLayerVisibility(${layer.id}, event)">${layer.visible ? '👀' : '🙈'}</button>
                 <button onclick="deleteLayer(${layer.id}, event)">🗑️</button>
-            </span>
+            </div>
         `;
-        item.insertBefore(checkbox, item.firstChild);
         
         item.addEventListener('click', (e) => {
             if (e.target.type !== 'checkbox') selectLayer(layer.id, e.shiftKey);
@@ -539,6 +556,7 @@ function getLayerTypeIcon(type) {
         case 'lipsync': return '💬';
         case 'blink': return '👀';
         case 'sequence': return '🎞️';
+        case 'crosssection': return '🔞';
         case 'puppet': return '🎭';
         case 'bounce': return '🎈';
         case 'audio': return '🎵';
@@ -1007,6 +1025,163 @@ function reloadSequenceSequence(layerId) {
         });
     };
     input.click();
+}
+
+// ===== 断面図プリセット管理 =====
+let crossSectionPresets = [];
+let crossSectionManifestLoaded = false;
+
+// 断面図マニフェスト読み込み
+async function loadCrossSectionManifest() {
+    if (crossSectionManifestLoaded) return crossSectionPresets;
+    
+    try {
+        const response = await fetch('./png_anime/manifest.json');
+        if (!response.ok) throw new Error('マニフェストファイルが見つかりません');
+        
+        const data = await response.json();
+        crossSectionPresets = data.presets || [];
+        crossSectionManifestLoaded = true;
+        console.log('🔞 断面図プリセット読み込み完了:', crossSectionPresets.length, '件');
+        return crossSectionPresets;
+    } catch (error) {
+        console.error('❌ 断面図マニフェスト読み込みエラー:', error);
+        return [];
+    }
+}
+
+// 断面図プリセット画像読み込み（パターン自動検出方式）
+async function loadCrossSectionImages(presetId) {
+    const presets = await loadCrossSectionManifest();
+    const preset = presets.find(p => p.id === presetId);
+    
+    if (!preset) {
+        console.error('❌ プリセットが見つかりません:', presetId);
+        return [];
+    }
+    
+    const images = [];
+    const basePath = `./png_anime/${preset.folder}/`;
+    const prefix = preset.prefix || 'frame_';
+    const digits = preset.digits || 3;
+    const extension = preset.extension || '.png';
+    
+    // 連番を0から順に読み込み、失敗したら終了
+    let index = 0;
+    let consecutiveErrors = 0;
+    const maxErrors = 3; // 連続3回失敗で終了（欠番対応）
+    
+    while (consecutiveErrors < maxErrors) {
+        const numStr = String(index).padStart(digits, '0');
+        const filename = `${prefix}${numStr}${extension}`;
+        
+        try {
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = basePath + filename;
+            });
+            images.push(img);
+            consecutiveErrors = 0; // 成功したらリセット
+        } catch (error) {
+            consecutiveErrors++;
+        }
+        index++;
+        
+        // 安全のため上限を設定（999枚まで）
+        if (index > 999) break;
+    }
+    
+    console.log(`🔞 断面図画像読み込み完了: ${preset.name} (${images.length}枚)`);
+    return images;
+}
+
+// ===== 断面図レイヤー作成 =====
+async function createCrossSectionLayer() {
+    // マニフェスト読み込み
+    const presets = await loadCrossSectionManifest();
+    
+    if (presets.length === 0) {
+        alert('断面図プリセットが見つかりません。\npng_anime/manifest.json を確認してください。');
+        return;
+    }
+    
+    // デフォルトは最初のプリセット
+    const defaultPreset = presets[0];
+    const images = await loadCrossSectionImages(defaultPreset.id);
+    
+    if (images.length === 0) {
+        alert('断面図画像の読み込みに失敗しました。\n画像ファイルを確認してください。');
+        return;
+    }
+    
+    const layer = {
+        id: nextLayerId++,
+        type: 'crosssection',
+        name: '断面図',
+        sequenceImages: images,
+        presetId: defaultPreset.id,
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        rotation: 0,
+        scale: 1,
+        opacity: 1.0,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        visible: true,
+        blendMode: 'source-over',
+        fps: 12,
+        frameSkip: 0,
+        
+        // パペット機能
+        parentLayerId: null,
+        
+        // 風揺れ機能（非対応）
+        windSwayEnabled: false,
+        windSwayParams: getDefaultWindSwayParams(),
+        
+        // 色抜きクリッピング
+        colorClipping: {
+            enabled: false,
+            referenceLayerId: null,
+            color: { r: 0, g: 255, b: 0 },
+            tolerance: 30,
+            invertClipping: false
+        }
+    };
+    
+    layers.push(layer);
+    updateLayerList();
+    selectLayer(layer.id, false);
+    render();
+    
+    if (typeof saveHistory === 'function') {
+        saveHistory();
+    }
+}
+
+// ===== 断面図プリセット変更 =====
+async function changeCrossSectionPreset(layerId, presetId) {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer || layer.type !== 'crosssection') return;
+    
+    const images = await loadCrossSectionImages(presetId);
+    
+    if (images.length === 0) {
+        alert('画像の読み込みに失敗しました。');
+        return;
+    }
+    
+    layer.sequenceImages = images;
+    layer.presetId = presetId;
+    
+    updatePropertiesPanel();
+    render();
+    
+    if (typeof saveHistory === 'function') {
+        saveHistory();
+    }
 }
 
 // ===== リネームダイアログ表示 =====

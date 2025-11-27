@@ -480,8 +480,11 @@ function drawPuppetLayer(layer, time) {
     const transformedLayerX = layer.x * parentTransform.scale * parentCos - layer.y * parentTransform.scale * parentSin;
     const transformedLayerY = layer.x * parentTransform.scale * parentSin + layer.y * parentTransform.scale * parentCos;
     
-    const finalX = parentTransform.x + transformedLayerX;
-    const finalY = parentTransform.y + transformedLayerY;
+    // Wiggleオフセットを適用
+    const wiggleOffset = typeof getWiggleOffset === 'function' ? getWiggleOffset(layer, time) : { x: 0, y: 0 };
+    
+    const finalX = parentTransform.x + transformedLayerX + wiggleOffset.x;
+    const finalY = parentTransform.y + transformedLayerY + wiggleOffset.y;
     const finalRotation = layer.rotation + parentTransform.rotation;
     const finalScale = layer.scale * parentTransform.scale;
     
